@@ -1,7 +1,7 @@
 # GMS 后端(原 auth-center / gms-ranch / task-runner 三个 Java 服务合并为一个 Go 进程)。
 # 与其他 cow-* 项目同一套部署方式:端口发布到宿主机,配置来自镜像内 config/prod.json
 # (数据库与游戏服地址都是 cowgalaxy.com,即宿主机);对外由 cow-startup/gateway 的 nginx
-# 把 gms-auth / gms-ranch / gms-taskrunner.cowgalaxy.com 一并反代到 :8080。
+# 把 gms-ranch.cowgalaxy.com 反代到 :8080(Java 时代的 gms-auth / gms-taskrunner 域名已下线)。
 #
 #   docker compose up -d
 #   docker compose logs -f

@@ -19,8 +19,8 @@ go test ./...
 `GMS_GAME_SERVER_ADDRESS`、`GMS_GAME_SERVER_API_KEY`。
 
 容器：`docker compose up -d --build`（`Dockerfile` 多阶段构建，镜像内含 `config/`）。
-线上把原来 `gms-auth` / `gms-ranch` / `gms-taskrunner` 三个域名都反代到本服务即可；前端默认用 `https://gms-ranch.cowgalaxy.com`，
-也可通过 `VITE_APP_API_BASE` 指定。
+线上只保留 `gms-ranch.cowgalaxy.com` 一个域名反代到本服务（Java 时代的 `gms-auth` / `gms-taskrunner` 已下线）；
+前端默认用 `https://gms-ranch.cowgalaxy.com`，也可通过 `VITE_APP_API_BASE` 指定。
 
 ## 目录
 
