@@ -39,6 +39,9 @@ type Config struct {
 		Game DB `json:"game"` // ranch_game:玩家、公会
 		Log  DB `json:"log"`  // ranch_log:登录、斗牛场日志
 		Tpl  DB `json:"tpl"`  // ranch_tpl:策划模板
+		// Portal cow-portal:官网公测邀请计划(u_invite_*)。可选,不配则不挂 /portal/invite 路由;
+		// 这块业务属于官网,将来迁到官网管理后端时连同 internal/modules/portalinvite 一起拿走
+		Portal DB `json:"portal"`
 	} `json:"databases"`
 
 	Ranch struct {
@@ -94,7 +97,7 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("GMS_GAME_SERVER_API_KEY"); v != "" {
 		c.Ranch.GameServerApiKey = v
 	}
-	dbs := []*DB{&c.Databases.Auth, &c.Databases.Gms, &c.Databases.Game, &c.Databases.Log, &c.Databases.Tpl}
+	dbs := []*DB{&c.Databases.Auth, &c.Databases.Gms, &c.Databases.Game, &c.Databases.Log, &c.Databases.Tpl, &c.Databases.Portal}
 	if v := os.Getenv("GMS_DB_PASSWORD"); v != "" {
 		for _, d := range dbs {
 			d.Password = v

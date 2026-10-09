@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -12,13 +13,14 @@ import (
 	"cow-manager-backend/internal/config"
 )
 
-// Conns 五个库的连接池。
+// Conns 各库的连接池。Portal 为可选(未配置时为 nil)。
 type Conns struct {
-	Auth *sqlx.DB // auth_center
-	Gms  *sqlx.DB // gms-ranch
-	Game *sqlx.DB // ranch_game
-	Log  *sqlx.DB // ranch_log
-	Tpl  *sqlx.DB // ranch_tpl
+	Auth   *sqlx.DB // auth_center
+	Gms    *sqlx.DB // gms-ranch
+	Game   *sqlx.DB // ranch_game
+	Log    *sqlx.DB // ranch_log
+	Tpl    *sqlx.DB // ranch_tpl
+	Portal *sqlx.DB // cow-portal(官网邀请计划,可选)
 }
 
 // Open 打开单个库并 ping。
@@ -58,12 +60,19 @@ func OpenAll(cfg *config.Config) (*Conns, error) {
 	if c.Tpl, err = Open(cfg.Databases.Tpl); err != nil {
 		return nil, err
 	}
+	// 官网库可选:没配 database 就跳过,连不上也只记日志不阻塞启动
+	if cfg.Databases.Portal.Database != "" {
+		if c.Portal, err = Open(cfg.Databases.Portal); err != nil {
+			log.Printf("官网库(portal)连接失败,/portal/invite 路由不挂载: %v", err)
+			c.Portal = nil
+		}
+	}
 	return c, nil
 }
 
 // Close 关闭全部连接池。
 func (c *Conns) Close() {
-	for _, d := range []*sqlx.DB{c.Auth, c.Gms, c.Game, c.Log, c.Tpl} {
+	for _, d := range []*sqlx.DB{c.Auth, c.Gms, c.Game, c.Log, c.Tpl, c.Portal} {
 		if d != nil {
 			_ = d.Close()
 		}

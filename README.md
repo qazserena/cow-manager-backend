@@ -36,6 +36,9 @@ internal/modules/gms         邮件/群邮件/签到/公会战配置的增删改
 internal/modules/ranchdata   玩家、公会、公会字典、公会战记录、斗牛场日志(只读 + 导出)
 internal/modules/analysis    da_ranch_* 统计表(只读 + 导出)
 internal/modules/task        cron 调度、执行日志、手动补跑、三个牧场统计任务
+internal/modules/portalinvite 官网公测邀请计划的管理与报表(读 cow-portal 库 u_invite_*);
+                             临时挂在 GMS,只依赖 httpx/auth/perm/query,库连接 / 权限码 / 路由自成一组,
+                             将来连同前端 src/modules/portal-invite 一起迁到官网管理后端
 ```
 
 ## 接口
@@ -58,6 +61,7 @@ internal/modules/task        cron 调度、执行日志、手动补跑、三个�
 | 游戏数据 | `GET /ranch/users[/{uid}\|/export]` `/ranch/guilds[/{guildId}\|/export]` `/ranch/guild-dict` `/ranch/guild-battles` `/ranch/bullring-logs` |
 | 统计 | `GET /analysis/bullring-count` `/bullring-rewards` `/user` `/retention`（均有 `/export`） |
 | 任务 | `GET /task/list` `GET /task/log?className=` `POST /task/enableOrDisableTask` `/task/updateCronTrigger` `/task/manualSchedule` |
+| 官网邀请计划（需配置 `databases.portal`） | 报表：`GET /portal/invite/overview` `/trend?days=` `/leaderboard?limit=` `/ips?min=`；列表（含 `/export`）：`GET /portal/invite/users` `/point-logs` `/admin-logs`；详情：`GET /portal/invite/users/{address或邀请码}`；管理：`POST /portal/invite/users/{address}/flag\|unflag\|adjust`（body `{reason, points}`）。权限码 `service/portal-invite/{view,export,flag,adjust}` |
 
 列表过滤参数（只对代码里声明可过滤的列生效）：`col=v`（重复即 IN）、`col_like=`、`col_from=`/`col_to=`、`col_gt=`/`col_lt=`/`col_ne=`。
 导出为同步返回的 UTF-8（带 BOM）CSV，时间按 `timezone` 参数格式化，枚举列按枚举元数据翻译。

@@ -5,7 +5,8 @@
     "gms":  { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "gms-ranch" },
     "game": { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_game" },
     "log":  { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_log" },
-    "tpl":  { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_tpl" }
+    "tpl":  { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_tpl" },
+    "portal": { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "cow-portal" }
   },
   "ranch": {
     "regionCode": "dev",
