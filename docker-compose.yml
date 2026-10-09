@@ -1,18 +1,24 @@
+# GMS 后端(原 auth-center / gms-ranch / task-runner 三个 Java 服务合并为一个 Go 进程)。
+# 与其他 cow-* 项目同一套部署方式:端口发布到宿主机,配置来自镜像内 config/prod.json
+# (数据库与游戏服地址都是 cowgalaxy.com,即宿主机);对外由 cow-startup/gateway 的 nginx
+# 把 gms-auth / gms-ranch / gms-taskrunner.cowgalaxy.com 一并反代到 :8080。
+#
+#   docker compose up -d
+#   docker compose logs -f
+#
+# 与 cow-startup/docker-compose/cow-manager-backend/docker-compose.yml 保持一致,改动后请同步。
 services:
-  cow-manager-backend:
-    build: .
+  cowManagerBackend:
     image: qazserena/cow-manager-backend:latest
+    platform: linux/amd64
+    pull_policy: always
+    restart: always
     container_name: cow-manager-backend
-    restart: unless-stopped
     environment:
+      TZ: Asia/Shanghai
       GMS_CONFIG: /app/config/prod.json
-      # 覆盖库地址 / 密码时用环境变量,不改镜像内配置
-      # GMS_DB_HOST: mysql
-      # GMS_DB_PASSWORD: ...
+    extra_hosts:
+      # 把 cowgalaxy.com 指到宿主机（等价于宿主机 /etc/hosts → 127.0.0.1）
+      - "cowgalaxy.com:host-gateway"
     ports:
-      - "127.0.0.1:8080:8080"
-    networks:
-      - cow
-networks:
-  cow:
-    external: true
+      - "8080:8080"
