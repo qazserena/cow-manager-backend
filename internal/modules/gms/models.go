@@ -70,8 +70,6 @@ func normalizeJSON(raw, def string) (string, error) {
 var auditColumns = []query.Column{
 	{Name: "createdBy", Label: "创建人", Kind: query.Int, Filter: true},
 	{Name: "createdTime", Label: "创建时间", Kind: query.TsMs, Filter: true, Sort: true},
-	{Name: "deletedBy", Label: "删除人", Kind: query.Int},
-	{Name: "deletedTime", Label: "删除时间", Kind: query.TsMs},
 	{Name: "auditStatus", Label: "审核状态", Kind: query.Int, Filter: true, Enum: "AuditStatus"},
 	{Name: "auditBy", Label: "审核人", Kind: query.Int, Filter: true},
 	{Name: "auditTime", Label: "审核时间", Kind: query.TsMs, Sort: true},
