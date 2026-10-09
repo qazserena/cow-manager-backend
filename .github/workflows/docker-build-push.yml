@@ -1,11 +1,18 @@
 name: Build and Push Docker Image
 
+# 触发：推 master、打 v* tag、手动。
+# 镜像标签：始终推 latest；tag 构建额外带 tag 名；非 tag 构建（master / 手动）额外带北京时间戳（如 20261009-234500）。
 on:
   push:
+    branches:
+      - "master"
     tags:
       - "v*"
-  # 手动触发:构建当前分支并推送 latest + 分支名 tag(如 master)
   workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   IMAGE_NAME: qazserena/cow-manager-backend
@@ -48,6 +55,7 @@ jobs:
           tags: |
             type=raw,value=latest
             type=ref,event=tag
+            type=raw,value={{date 'YYYYMMDD-HHmmss' tz='Asia/Shanghai'}},enable=${{ github.ref_type != 'tag' }}
 
       - name: 构建并推送
         uses: docker/build-push-action@v6
@@ -59,3 +67,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: 输出镜像标签
+        run: echo "${{ steps.meta.outputs.tags }}"
