@@ -1,0 +1,173 @@
+package auth
+
+import (
+	"encoding/json"
+	"sort"
+	"strings"
+	"sync"
+)
+
+// Tree 角色权限树(role.permissionTree 的 JSON 形态)。
+//
+// 校验规则与 Java PermissionTree.check 一致:按 "/" 逐段下钻,途中任一节点
+// wildcard=true 即放行;整条路径都能匹配到节点也放行(非严格模式)。
+type Tree struct {
+	Code     string           `json:"code"`
+	Wildcard bool             `json:"wildcard"`
+	Children map[string]*Tree `json:"children,omitempty"`
+}
+
+// ParseTree 解析 JSON;空串返回空树。
+func ParseTree(raw string) (*Tree, error) {
+	t := &Tree{}
+	if strings.TrimSpace(raw) == "" {
+		return t, nil
+	}
+	if err := json.Unmarshal([]byte(raw), t); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// Clone 深拷贝。
+func (t *Tree) Clone() *Tree {
+	if t == nil {
+		return nil
+	}
+	c := &Tree{Code: t.Code, Wildcard: t.Wildcard}
+	if len(t.Children) > 0 {
+		c.Children = make(map[string]*Tree, len(t.Children))
+		for k, v := range t.Children {
+			c.Children[k] = v.Clone()
+		}
+	}
+	return c
+}
+
+// Merge 把另一棵树并入(多角色取并集)。
+func (t *Tree) Merge(o *Tree) {
+	if o == nil {
+		return
+	}
+	if o.Wildcard {
+		t.Wildcard = true
+	}
+	for k, child := range o.Children {
+		if t.Children == nil {
+			t.Children = map[string]*Tree{}
+		}
+		if mine, ok := t.Children[k]; ok {
+			mine.Merge(child)
+		} else {
+			t.Children[k] = child.Clone()
+		}
+	}
+}
+
+// Check 校验权限码,如 "service/gms-ranch/sync"。
+func (t *Tree) Check(code string) bool {
+	if t == nil {
+		return false
+	}
+	node := t
+	for _, part := range strings.Split(strings.Trim(code, "/"), "/") {
+		if node.Wildcard {
+			return true
+		}
+		if part == "" {
+			continue
+		}
+		child, ok := node.Children[part]
+		if !ok {
+			return false
+		}
+		node = child
+	}
+	return true
+}
+
+// MergeTrees 合并多棵树为新树。
+func MergeTrees(trees ...*Tree) *Tree {
+	root := &Tree{}
+	for _, t := range trees {
+		root.Merge(t)
+	}
+	return root
+}
+
+// Node 权限定义树(GET /permission/tree 的返回形态,供角色编辑器展示全集)。
+type Node struct {
+	Code     string           `json:"code"`
+	Name     string           `json:"name"`
+	Children map[string]*Node `json:"children"`
+}
+
+func newNode(code, name string) *Node {
+	return &Node{Code: code, Name: name, Children: map[string]*Node{}}
+}
+
+// 顶层命名空间的显示名,与 Java 侧同步上来的权限数据一致。
+var namespaceNames = map[string]string{
+	"service":  "服务",
+	"function": "功能",
+	"table":    "数据表",
+	"game":     "游戏",
+}
+
+// Registry 启动时由各模块注册权限码与名称,构成权限定义树。
+type Registry struct {
+	mu   sync.RWMutex
+	root *Node
+}
+
+// NewRegistry 创建空注册表。
+func NewRegistry() *Registry { return &Registry{root: newNode("", "")} }
+
+// Register 注册权限码(如 "service/gms-ranch/sync"),并为末段命名;
+// 中间段若尚未命名则用给定的 names 依次填充。返回原权限码,便于内联使用。
+func (r *Registry) Register(code, name string, intermediateNames ...string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	parts := strings.Split(strings.Trim(code, "/"), "/")
+	node := r.root
+	for i, part := range parts {
+		child, ok := node.Children[part]
+		if !ok {
+			child = newNode(part, "")
+			node.Children[part] = child
+		}
+		if i == len(parts)-1 {
+			if name != "" {
+				child.Name = name
+			}
+		} else if child.Name == "" {
+			if i == 0 {
+				child.Name = namespaceNames[part]
+			} else if i-1 < len(intermediateNames) {
+				child.Name = intermediateNames[i-1]
+			}
+		}
+		node = child
+	}
+	return code
+}
+
+// Tree 返回定义树的深拷贝。
+func (r *Registry) Tree() *Node {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return cloneNode(r.root)
+}
+
+func cloneNode(n *Node) *Node {
+	c := newNode(n.Code, n.Name)
+	keys := make([]string, 0, len(n.Children))
+	for k := range n.Children {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		c.Children[k] = cloneNode(n.Children[k])
+	}
+	return c
+}

@@ -1,0 +1,21 @@
+{
+  "listen": ":8080",
+  "databases": {
+    "auth": { "host": "127.0.0.1", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "auth_center" },
+    "gms":  { "host": "127.0.0.1", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "gms-ranch" },
+    "game": { "host": "127.0.0.1", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_game" },
+    "log":  { "host": "127.0.0.1", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_log" },
+    "tpl":  { "host": "127.0.0.1", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_tpl" }
+  },
+  "ranch": {
+    "regionCode": "dev",
+    "channels": [],
+    "defaultTimeZone": "Asia/Shanghai",
+    "gameServerAddress": "http://127.0.0.1:8987",
+    "gameServerApiKey": "e45542c65a1f11199ad3303bd8c8fe356a2aa0a1",
+    "serverId": 1,
+    "serverName": "ranch_server"
+  },
+  "auth": { "tokenTTLHours": 24, "tokenRefreshHours": 12 },
+  "task": { "enabled": true, "defaultCron": "0 40 1 * * *", "timeZone": "Asia/Shanghai" }
+}

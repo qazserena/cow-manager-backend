@@ -1,0 +1,6 @@
+/gms
+/bin/
+/dist/
+*.log
+config/local*.json
+.idea

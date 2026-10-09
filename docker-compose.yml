@@ -1,0 +1,18 @@
+services:
+  cow-manager-backend:
+    build: .
+    image: qazserena/cow-manager-backend-go:latest
+    container_name: cow-manager-backend
+    restart: unless-stopped
+    environment:
+      GMS_CONFIG: /app/config/prod.json
+      # 覆盖库地址 / 密码时用环境变量,不改镜像内配置
+      # GMS_DB_HOST: mysql
+      # GMS_DB_PASSWORD: ...
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - cow
+networks:
+  cow:
+    external: true
