@@ -1,7 +1,7 @@
 services:
   cow-manager-backend:
     build: .
-    image: qazserena/cow-manager-backend-go:latest
+    image: qazserena/cow-manager-backend:latest
     container_name: cow-manager-backend
     restart: unless-stopped
     environment:

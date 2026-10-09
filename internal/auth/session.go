@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"cow-manager-backend-go/internal/httpx"
+	"cow-manager-backend/internal/httpx"
 )
 
 // TokenHeader 前端携带令牌的请求头。

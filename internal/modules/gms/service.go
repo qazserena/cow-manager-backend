@@ -10,9 +10,9 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"cow-manager-backend-go/internal/config"
-	"cow-manager-backend-go/internal/httpx"
-	"cow-manager-backend-go/internal/query"
+	"cow-manager-backend/internal/config"
+	"cow-manager-backend/internal/httpx"
+	"cow-manager-backend/internal/query"
 )
 
 // Service 牧场运营管理。

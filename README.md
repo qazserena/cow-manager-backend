@@ -1,6 +1,6 @@
 # 游戏管理平台（GMS）— Go 后端
 
-`cow-manager-backend`（Java：auth-center / gms-ranch / task-runner 三个 Spring Boot 服务）的 Go 重写版，
+原 Java 版（`../cow-manager-backend-java`，auth-center / gms-ranch / task-runner 三个 Spring Boot 服务，已废弃、仅供参考）的 Go 重写版，
 **一个进程、一个端口**提供全部接口。不再实现通用 Table 框架（schema + 条件 DSL），每个资源都是普通 REST；
 前端 `cow-manager-frontend` 已同步改为本地声明列、按普通 query 参数过滤。
 

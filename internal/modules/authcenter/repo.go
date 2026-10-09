@@ -8,7 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"cow-manager-backend-go/internal/httpx"
+	"cow-manager-backend/internal/httpx"
 )
 
 // Repo auth_center 库的数据访问。

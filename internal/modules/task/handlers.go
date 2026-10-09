@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"cow-manager-backend-go/internal/auth"
-	"cow-manager-backend-go/internal/httpx"
-	"cow-manager-backend-go/internal/perm"
+	"cow-manager-backend/internal/auth"
+	"cow-manager-backend/internal/httpx"
+	"cow-manager-backend/internal/perm"
 )
 
 // Register 挂载路由。路径与响应形态与原 task-runner 保持一致,前端无需改动。

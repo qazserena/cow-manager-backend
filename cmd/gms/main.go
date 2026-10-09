@@ -13,17 +13,17 @@ import (
 	"syscall"
 	"time"
 
-	"cow-manager-backend-go/internal/auth"
-	"cow-manager-backend-go/internal/config"
-	"cow-manager-backend-go/internal/db"
-	"cow-manager-backend-go/internal/httpx"
-	"cow-manager-backend-go/internal/modules/analysis"
-	"cow-manager-backend-go/internal/modules/authcenter"
-	"cow-manager-backend-go/internal/modules/gms"
-	"cow-manager-backend-go/internal/modules/ranchdata"
-	"cow-manager-backend-go/internal/modules/task"
-	"cow-manager-backend-go/internal/perm"
-	"cow-manager-backend-go/internal/query"
+	"cow-manager-backend/internal/auth"
+	"cow-manager-backend/internal/config"
+	"cow-manager-backend/internal/db"
+	"cow-manager-backend/internal/httpx"
+	"cow-manager-backend/internal/modules/analysis"
+	"cow-manager-backend/internal/modules/authcenter"
+	"cow-manager-backend/internal/modules/gms"
+	"cow-manager-backend/internal/modules/ranchdata"
+	"cow-manager-backend/internal/modules/task"
+	"cow-manager-backend/internal/perm"
+	"cow-manager-backend/internal/query"
 )
 
 func main() {

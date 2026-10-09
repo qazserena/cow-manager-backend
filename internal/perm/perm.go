@@ -8,7 +8,7 @@
 //	game/ranch/{region}         区域可见性
 package perm
 
-import "cow-manager-backend-go/internal/auth"
+import "cow-manager-backend/internal/auth"
 
 // Registry 全局权限定义树。
 var Registry = auth.NewRegistry()

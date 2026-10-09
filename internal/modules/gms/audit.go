@@ -6,7 +6,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"cow-manager-backend-go/internal/httpx"
+	"cow-manager-backend/internal/httpx"
 )
 
 // 审核状态,与 Java AuditStatus / 前端 AuditWidget 一致。

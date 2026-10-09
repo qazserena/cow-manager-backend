@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"cow-manager-backend-go/internal/auth"
+	"cow-manager-backend/internal/auth"
 )
 
 // User 管理员(auth_center.user)。

@@ -8,8 +8,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"cow-manager-backend-go/internal/auth"
-	"cow-manager-backend-go/internal/httpx"
+	"cow-manager-backend/internal/auth"
+	"cow-manager-backend/internal/httpx"
 )
 
 // Service 登录与会话逻辑;同时实现 auth.Loader。

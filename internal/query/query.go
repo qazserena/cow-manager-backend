@@ -24,7 +24,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"cow-manager-backend-go/internal/httpx"
+	"cow-manager-backend/internal/httpx"
 )
 
 // Kind 列的值类型,决定过滤参数解析与导出格式。

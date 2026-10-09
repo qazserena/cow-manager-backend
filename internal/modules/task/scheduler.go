@@ -12,7 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/robfig/cron/v3"
 
-	"cow-manager-backend-go/internal/httpx"
+	"cow-manager-backend/internal/httpx"
 )
 
 // VO 任务列表项,字段与前端 TaskList 一致(时间为秒)。

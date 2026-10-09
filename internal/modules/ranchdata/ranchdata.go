@@ -8,10 +8,10 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"cow-manager-backend-go/internal/auth"
-	"cow-manager-backend-go/internal/httpx"
-	"cow-manager-backend-go/internal/perm"
-	"cow-manager-backend-go/internal/query"
+	"cow-manager-backend/internal/auth"
+	"cow-manager-backend/internal/httpx"
+	"cow-manager-backend/internal/perm"
+	"cow-manager-backend/internal/query"
 )
 
 // Service 只读数据服务。

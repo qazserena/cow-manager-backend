@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"cow-manager-backend-go/internal/httpx"
-	"cow-manager-backend-go/internal/query"
+	"cow-manager-backend/internal/httpx"
+	"cow-manager-backend/internal/query"
 )
 
 // Mail 个人邮件(gms_ranch_mail)。attachment 为 JSON 文本,代币数量按"个"填写,

@@ -9,7 +9,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 
-	"cow-manager-backend-go/internal/config"
+	"cow-manager-backend/internal/config"
 )
 
 // Conns 五个库的连接池。

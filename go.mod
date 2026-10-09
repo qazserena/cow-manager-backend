@@ -1,4 +1,4 @@
-module cow-manager-backend-go
+module cow-manager-backend
 
 go 1.25
 
