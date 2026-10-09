@@ -1,11 +1,11 @@
 {
   "listen": ":8080",
   "databases": {
-    "auth": { "host": "mysql", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "auth_center" },
-    "gms":  { "host": "mysql", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "gms-ranch" },
-    "game": { "host": "mysql", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_game" },
-    "log":  { "host": "mysql", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_log" },
-    "tpl":  { "host": "mysql", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_tpl" }
+    "auth": { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "auth_center" },
+    "gms":  { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "gms-ranch" },
+    "game": { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_game" },
+    "log":  { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_log" },
+    "tpl":  { "host": "cowgalaxy.com", "port": 3306, "user": "root", "password": "9zCCGguRbb52", "database": "ranch_tpl" }
   },
   "ranch": {
     "regionCode": "prod",
