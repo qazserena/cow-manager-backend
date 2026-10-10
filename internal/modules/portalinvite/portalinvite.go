@@ -23,6 +23,7 @@ import (
 	"cow-manager-backend/internal/auth"
 	"cow-manager-backend/internal/httpx"
 	"cow-manager-backend/internal/perm"
+	"cow-manager-backend/internal/portalapi"
 	"cow-manager-backend/internal/query"
 )
 
@@ -34,42 +35,28 @@ var (
 	PermAdjust = perm.Registry.Register("service/portal-invite/adjust", "手动调整积分", "官网邀请计划")
 )
 
-// 与官网 model.InviteLevels 同一组门槛,只用于报表分桶(依据见 cow-portal-frontend/docs/invite-points-and-levels.md)。
-var levelMins = []int64{0, 300, 1200, 3000, 8000, 20000, 50000}
-
-func levelOf(points int64) int {
-	lv := 1
-	for i, m := range levelMins {
-		if points >= m {
-			lv = i + 1
-		}
-	}
-	return lv
-}
-
 // 管理动作写入 u_invite_point_log 的 kind;官网结算只认 bind/activate/valid/joined/milestone,不会碰这类流水。
 const kindAdminAdjust = "admin_adjust"
 
 // 管理员手动标记的 flag 值;官网侧只认 flag 是否为空,所以可以安全扩展。
 const flagManual = "manual"
 
-// 恢复被自动标记的关系时需要补发的两档(官网只在绑定瞬间发这两档,之后不会再补)。
-// 数值必须与 cow-portal-backend/internal/model/invite_program.go 的 InvitePointsBind / InvitePointsJoined 一致。
-const (
-	pointsBind   = 20
-	pointsJoined = 30
-)
-
 // Service 官网邀请计划管理服务。
 type Service struct {
 	db      *sqlx.DB // cow-portal 库
+	api     *portalapi.Client
 	loc     *time.Location
 	labeler query.EnumLabeler
 }
 
-// NewService 创建服务。
-func NewService(portal *sqlx.DB, loc *time.Location, labeler query.EnumLabeler) *Service {
-	return &Service{db: portal, loc: loc, labeler: labeler}
+// NewService 创建服务。api 用来拉官网的积分口径(等级门槛等),保证报表分桶与官网一致。
+func NewService(portal *sqlx.DB, api *portalapi.Client, loc *time.Location, labeler query.EnumLabeler) *Service {
+	return &Service{db: portal, api: api, loc: loc, labeler: labeler}
+}
+
+// levelOf 积分对应等级(门槛来自官网 /invite/rules)。
+func (s *Service) levelOf(ctx context.Context, points int64) int {
+	return s.api.LevelOf(ctx, points).Level
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +116,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	s.mountList(mux, "/portal/invite/point-logs", PointLogSpec)
 	s.mountList(mux, "/portal/invite/admin-logs", AdminLogSpec)
 
+	mux.HandleFunc("GET /portal/invite/rules", httpx.H(auth.Require(PermView, s.rules)))
 	mux.HandleFunc("GET /portal/invite/overview", httpx.H(auth.Require(PermView, s.overview)))
 	mux.HandleFunc("GET /portal/invite/trend", httpx.H(auth.Require(PermView, s.trend)))
 	mux.HandleFunc("GET /portal/invite/leaderboard", httpx.H(auth.Require(PermView, s.leaderboard)))
@@ -172,6 +160,19 @@ type Overview struct {
 type Bucket struct {
 	Key   string `json:"key"`
 	Count int64  `json:"count"`
+}
+
+// RulesInfo 积分口径 + 来源标记(前端据此显示等级名与门槛,不写死)。
+type RulesInfo struct {
+	*portalapi.InviteRules
+	FromPortal bool   `json:"fromPortal"`
+	Source     string `json:"source"`
+}
+
+func (s *Service) rules(w http.ResponseWriter, r *http.Request) error {
+	rules := s.api.Rules(r.Context())
+	httpx.OK(w, &RulesInfo{InviteRules: rules, FromPortal: s.api.RulesFromPortal(), Source: s.api.Base() + "/invite/rules"})
+	return nil
 }
 
 func (s *Service) overview(w http.ResponseWriter, r *http.Request) error {
@@ -220,30 +221,24 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) error {
 	}
 	out.PointsTotal, out.PointsToday = p.Total, p.Today
 
-	// 等级分布:门槛与官网一致,在 SQL 里按 CASE 分桶
+	// 等级分布:门槛从官网 /invite/rules 拉取(缓存 10 分钟,失败用兜底值),CASE 表达式按门槛动态生成
 	var levels []struct {
 		Level int   `db:"lv"`
 		Count int64 `db:"cnt"`
 	}
 	if err := s.db.SelectContext(ctx, &levels, `
-		SELECT CASE
-		         WHEN points >= 50000 THEN 7
-		         WHEN points >= 20000 THEN 6
-		         WHEN points >= 8000  THEN 5
-		         WHEN points >= 3000  THEN 4
-		         WHEN points >= 1200  THEN 3
-		         WHEN points >= 300   THEN 2
-		         ELSE 1 END AS lv, COUNT(*) AS cnt
+		SELECT `+s.api.LevelCaseSQL(ctx, "points")+` AS lv, COUNT(*) AS cnt
 		FROM u_invite_user WHERE points > 0 GROUP BY lv ORDER BY lv`); err != nil {
 		return err
 	}
-	out.LevelBuckets = make([]Bucket, 0, len(levelMins))
+	ruleLevels := s.api.Rules(ctx).Levels
+	out.LevelBuckets = make([]Bucket, 0, len(ruleLevels))
 	byLevel := map[int]int64{}
 	for _, l := range levels {
 		byLevel[l.Level] = l.Count
 	}
-	for lv := 1; lv <= len(levelMins); lv++ {
-		out.LevelBuckets = append(out.LevelBuckets, Bucket{Key: fmt.Sprintf("%d", lv), Count: byLevel[lv]})
+	for _, lv := range ruleLevels {
+		out.LevelBuckets = append(out.LevelBuckets, Bucket{Key: fmt.Sprintf("%d", lv.Level), Count: byLevel[lv.Level]})
 	}
 
 	if err := s.db.SelectContext(ctx, &out.FlagBuckets, `
@@ -396,7 +391,7 @@ func (s *Service) leaderboard(w http.ResponseWriter, r *http.Request) error {
 	out := make([]*LeaderboardRow, 0, len(rows))
 	for i, x := range rows {
 		row := &LeaderboardRow{
-			Rank: i + 1, Address: x.Address, Code: x.Code, Points: x.Points, Level: levelOf(x.Points),
+			Rank: i + 1, Address: x.Address, Code: x.Code, Points: x.Points, Level: s.levelOf(r.Context(), x.Points),
 			InviteTotal: x.InviteTotal, InviteValid: x.InviteValid,
 		}
 		if x.PointsAt != nil {
@@ -558,7 +553,7 @@ func (s *Service) userDetail(w http.ResponseWriter, r *http.Request) error {
 		return httpx.NotFound("地址或邀请码不存在")
 	}
 	address := u.Address
-	out := &UserDetail{User: u, Level: levelOf(u.Points), Invitees: []*userRow{}, PointLogs: []pointLogRow{}, IPs: []ipLogRow{}, AdminLogs: []adminLogRow{}}
+	out := &UserDetail{User: u, Level: s.levelOf(ctx, u.Points), Invitees: []*userRow{}, PointLogs: []pointLogRow{}, IPs: []ipLogRow{}, AdminLogs: []adminLogRow{}}
 
 	var name *string
 	_ = s.db.GetContext(ctx, &name, "SELECT CASE WHEN name = address THEN NULL ELSE name END FROM u_profile WHERE address = ?", address)
@@ -748,10 +743,12 @@ func (s *Service) unflag(w http.ResponseWriter, r *http.Request) error {
 	}
 	// 自动标记(same_ip / ip_limited)的关系从未发过 bind / joined,恢复后由官网结算补 activate / valid,
 	// bind / joined 这两档在这里按官网口径补发(INSERT IGNORE 保证不会重复)
-	if err := grantIfMissing(ctx, tx, u.Inviter, "bind", address, pointsBind); err != nil {
+	// 分值取官网当前口径(/invite/rules),与官网结算保持一致
+	rules := s.api.Rules(ctx)
+	if err := grantIfMissing(ctx, tx, u.Inviter, "bind", address, rules.BindPoints); err != nil {
 		return err
 	}
-	if err := grantIfMissing(ctx, tx, address, "joined", u.Inviter, pointsJoined); err != nil {
+	if err := grantIfMissing(ctx, tx, address, "joined", u.Inviter, rules.JoinedPoints); err != nil {
 		return err
 	}
 	if err := writeAdminLog(ctx, tx, sess, "unflag", address, restored, body.Reason); err != nil {

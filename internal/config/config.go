@@ -64,6 +64,36 @@ type Config struct {
 		DefaultCron string `json:"defaultCron"`
 		TimeZone    string `json:"timeZone"`
 	} `json:"task"`
+
+	// Portal 官网相关(临时承载在 GMS 的官网模块使用;迁走时整段删除)
+	Portal struct {
+		// APIBase 官网后端公开接口根地址,用来拉邀请积分口径等;缺省 https://cow-portal-backend.cowgalaxy.com
+		APIBase string `json:"apiBase"`
+		// ImageHosting 官网图床前缀,用来把头像编号解析成 URL;缺省 https://oss.cowgalaxy.com
+		ImageHosting string `json:"imageHosting"`
+		// SiteURL 官网站点前缀,用来拼邀请链接;缺省 https://cowgalaxy.com
+		SiteURL string `json:"siteUrl"`
+	} `json:"portal"`
+}
+
+// GameSchemaForPortal 官网库与游戏库在同一 MySQL 实例时返回游戏库名(可在同一条 SQL 里跨库 JOIN),
+// 否则返回空串,调用方应退化为分步查询。
+func (c *Config) GameSchemaForPortal() string {
+	p, g := c.Databases.Portal, c.Databases.Game
+	if p.Database == "" || g.Database == "" {
+		return ""
+	}
+	pp, gp := p.Port, g.Port
+	if pp == 0 {
+		pp = 3306
+	}
+	if gp == 0 {
+		gp = 3306
+	}
+	if !strings.EqualFold(p.Host, g.Host) || pp != gp {
+		return ""
+	}
+	return g.Database
 }
 
 // Load 读取配置并应用默认值与环境变量覆盖:
@@ -96,6 +126,9 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("GMS_GAME_SERVER_API_KEY"); v != "" {
 		c.Ranch.GameServerApiKey = v
+	}
+	if v := os.Getenv("GMS_PORTAL_API_BASE"); v != "" {
+		c.Portal.APIBase = v
 	}
 	dbs := []*DB{&c.Databases.Auth, &c.Databases.Gms, &c.Databases.Game, &c.Databases.Log, &c.Databases.Tpl, &c.Databases.Portal}
 	if v := os.Getenv("GMS_DB_PASSWORD"); v != "" {
@@ -139,4 +172,16 @@ func (c *Config) applyDefaults() {
 	if c.Task.TimeZone == "" {
 		c.Task.TimeZone = c.Ranch.DefaultTimeZone
 	}
+	if c.Portal.APIBase == "" {
+		c.Portal.APIBase = "https://cow-portal-backend.cowgalaxy.com"
+	}
+	if c.Portal.ImageHosting == "" {
+		c.Portal.ImageHosting = "https://oss.cowgalaxy.com"
+	}
+	if c.Portal.SiteURL == "" {
+		c.Portal.SiteURL = "https://cowgalaxy.com"
+	}
+	c.Portal.APIBase = strings.TrimRight(c.Portal.APIBase, "/")
+	c.Portal.ImageHosting = strings.TrimRight(c.Portal.ImageHosting, "/")
+	c.Portal.SiteURL = strings.TrimRight(c.Portal.SiteURL, "/")
 }

@@ -49,6 +49,9 @@ type Column struct {
 	Sort   bool
 	// Enum 导出时用于把整数翻译成枚举文案的 meta 枚举代码(可空)
 	Enum string
+	// Expr 可选的 SQL 表达式(可带表别名或子查询),用于 SELECT / WHERE / ORDER BY;
+	// 为空则直接用 `Name`。配合 Spec.From 做多表联查时使用
+	Expr string
 }
 
 // Spec 一张表(或视图)的只读查询声明。
@@ -57,6 +60,25 @@ type Spec struct {
 	Columns     []Column
 	DefaultSort string // 如 "`id` DESC"
 	BaseWhere   string // 固定附加条件,如 "deletedTime = 0"
+	// From 可选的自定义 FROM 子句(可含 JOIN / 派生表);为空则用 `Table`。
+	// 设了 From 之后 Table 只用于权限码与导出文件名
+	From string
+}
+
+// expr 列在 SQL 里的写法。
+func (c *Column) expr() string {
+	if c.Expr != "" {
+		return c.Expr
+	}
+	return "`" + c.Name + "`"
+}
+
+// from FROM 子句。
+func (s *Spec) from() string {
+	if s.From != "" {
+		return s.From
+	}
+	return "`" + s.Table + "`"
 }
 
 // EnumLabeler 导出时的枚举翻译回调。
@@ -75,7 +97,11 @@ func (s *Spec) Column(name string) *Column {
 func (s *Spec) selectExpr() string {
 	parts := make([]string, len(s.Columns))
 	for i, c := range s.Columns {
-		parts[i] = "`" + c.Name + "`"
+		if c.Expr != "" {
+			parts[i] = c.Expr + " AS `" + c.Name + "`"
+		} else {
+			parts[i] = "`" + c.Name + "`"
+		}
 	}
 	return strings.Join(parts, ", ")
 }
@@ -147,7 +173,7 @@ func (s *Spec) Where(q url.Values) *Where {
 		if !c.Filter {
 			continue
 		}
-		col := "`" + c.Name + "`"
+		col := c.expr()
 		if vals, ok := q[c.Name]; ok {
 			var args []any
 			for _, v := range vals {
@@ -198,7 +224,7 @@ func (s *Spec) OrderBy(q url.Values) string {
 		if dir == "desc" || dir == "descend" {
 			d = "DESC"
 		}
-		parts = append(parts, "`"+c.Name+"` "+d)
+		parts = append(parts, c.expr()+" "+d)
 	}
 	if len(parts) == 0 {
 		if s.DefaultSort == "" {
@@ -272,13 +298,13 @@ func (s *Spec) scan(rows *sqlx.Rows) ([]Row, error) {
 // Count 统计行数。
 func (s *Spec) Count(ctx context.Context, db *sqlx.DB, w *Where) (int64, error) {
 	var total int64
-	err := db.GetContext(ctx, &total, "SELECT COUNT(*) FROM `"+s.Table+"`"+w.SQL(), w.Args...)
+	err := db.GetContext(ctx, &total, "SELECT COUNT(*) FROM "+s.from()+w.SQL(), w.Args...)
 	return total, err
 }
 
 // Select 查询行(limit<=0 表示不限)。
 func (s *Spec) Select(ctx context.Context, db *sqlx.DB, w *Where, order string, limit, offset int) ([]Row, error) {
-	sql := "SELECT " + s.selectExpr() + " FROM `" + s.Table + "`" + w.SQL() + order
+	sql := "SELECT " + s.selectExpr() + " FROM " + s.from() + w.SQL() + order
 	args := append([]any{}, w.Args...)
 	if limit > 0 {
 		sql += " LIMIT ? OFFSET ?"
@@ -317,7 +343,11 @@ func (s *Spec) One(ctx context.Context, db *sqlx.DB, col string, val any) (Row, 
 	if s.BaseWhere != "" {
 		w.Add(s.BaseWhere)
 	}
-	w.Add("`"+col+"` = ?", val)
+	if c := s.Column(col); c != nil {
+		w.Add(c.expr()+" = ?", val)
+	} else {
+		w.Add("`"+col+"` = ?", val)
+	}
 	rows, err := s.Select(ctx, db, w, "", 1, 0)
 	if err != nil || len(rows) == 0 {
 		return nil, err
@@ -328,7 +358,7 @@ func (s *Spec) One(ctx context.Context, db *sqlx.DB, col string, val any) (Row, 
 // ExportCSV 按过滤条件导出全部行为 UTF-8(带 BOM)CSV。
 func (s *Spec) ExportCSV(ctx context.Context, db *sqlx.DB, q url.Values, out io.Writer, loc *time.Location, labeler EnumLabeler) error {
 	w := s.Where(q)
-	sql := "SELECT " + s.selectExpr() + " FROM `" + s.Table + "`" + w.SQL() + s.OrderBy(q)
+	sql := "SELECT " + s.selectExpr() + " FROM " + s.from() + w.SQL() + s.OrderBy(q)
 	rows, err := db.QueryxContext(ctx, sql, w.Args...)
 	if err != nil {
 		return err

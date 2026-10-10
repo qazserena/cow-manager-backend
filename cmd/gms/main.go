@@ -21,9 +21,11 @@ import (
 	"cow-manager-backend/internal/modules/authcenter"
 	"cow-manager-backend/internal/modules/gms"
 	"cow-manager-backend/internal/modules/portalinvite"
+	"cow-manager-backend/internal/modules/portaluser"
 	"cow-manager-backend/internal/modules/ranchdata"
 	"cow-manager-backend/internal/modules/task"
 	"cow-manager-backend/internal/perm"
+	"cow-manager-backend/internal/portalapi"
 	"cow-manager-backend/internal/query"
 )
 
@@ -86,11 +88,17 @@ func main() {
 	dataSvc.Register(mux)
 	analysisSvc.Register(mux)
 	scheduler.Register(mux)
-	// 官网公测邀请计划(临时挂在 GMS;将来随 internal/modules/portalinvite 一起迁到官网管理后端)
+	// 官网模块(临时挂在 GMS;将来随 internal/modules/portal* + internal/portalapi 一起迁到官网管理后端)
 	if conns.Portal != nil {
-		portalinvite.NewService(conns.Portal, loc, labeler).Register(mux)
+		portal := portalapi.New(cfg.Portal.APIBase)
+		portalinvite.NewService(conns.Portal, portal, loc, labeler).Register(mux)
+		portaluser.NewService(conns.Portal, conns.Game, conns.Log, cfg.GameSchemaForPortal(),
+			cfg.Portal.ImageHosting, cfg.Portal.SiteURL, portal, loc, labeler).Register(mux)
+		if cfg.GameSchemaForPortal() == "" {
+			log.Printf("官网库与游戏库不在同一实例,官网用户列表不含游戏字段")
+		}
 	} else {
-		log.Printf("未配置 databases.portal,官网邀请计划管理接口(/portal/invite/*)未挂载")
+		log.Printf("未配置 databases.portal,官网模块接口(/portal/*)未挂载")
 	}
 
 	handler := httpx.Chain(mux, httpx.Recover, httpx.Logging, httpx.CORS, sessions.Authenticate)
