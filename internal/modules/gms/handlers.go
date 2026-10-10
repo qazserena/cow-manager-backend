@@ -25,17 +25,14 @@ func (s *Service) Register(mux *http.ServeMux) {
 		return nil
 	})))
 
-	// 游戏服透传:/proxy/admin/config/queryAllConfig 等 —— 读走「游戏配置 · 查看」,写走「游戏配置 · 可更改」
+	// 游戏服透传:只放行白名单里的接口(方法 + 路径 + 权限),避免拿着「游戏配置」权限去调游戏服其它 admin 接口
 	mux.HandleFunc("/proxy/", httpx.H(func(w http.ResponseWriter, r *http.Request) error {
-		code := perm.GameConfigView
-		if r.Method != http.MethodGet {
-			code = perm.GameConfigEdit
+		target := strings.TrimPrefix(r.URL.Path, "/proxy")
+		route, ok := proxyRoutes[target]
+		if !ok || route.method != r.Method {
+			return httpx.Forbidden()
 		}
-		return auth.Require(code, func(w http.ResponseWriter, r *http.Request) error {
-			target := strings.TrimPrefix(r.URL.Path, "/proxy")
-			if !strings.HasPrefix(target, "/admin/") {
-				return httpx.Forbidden()
-			}
+		return auth.Require(route.code, func(w http.ResponseWriter, r *http.Request) error {
 			return s.game.Proxy(w, r, target)
 		})(w, r)
 	}))
@@ -43,6 +40,12 @@ func (s *Service) Register(mux *http.ServeMux) {
 	for module, spec := range moduleSpecs {
 		s.registerModule(mux, module, spec)
 	}
+}
+
+// proxyRoutes 允许透传到游戏服的接口白名单:读走「游戏配置 · 查看」,写走「游戏配置 · 可更改」。
+var proxyRoutes = map[string]struct{ method, code string }{
+	"/admin/config/queryAllConfig": {http.MethodGet, perm.GameConfigView},
+	"/admin/config/saveConfig":     {http.MethodPost, perm.GameConfigEdit},
 }
 
 // moduleFeature 运营模块 → 功能权限 key(签到配置归到「游戏配置」页)。

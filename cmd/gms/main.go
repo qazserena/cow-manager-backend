@@ -55,8 +55,8 @@ func main() {
 	}
 	defer conns.Close()
 
-	// 区域权限码(前端按 game/ranch/{region} 过滤可见区域)
-	perm.Game(cfg.Ranch.RegionCode)
+	// 区域权限码 game/ranch/{region}:前端据此过滤可见区域;后端登录与全局中间件也强制校验(见下)
+	regionPerm := perm.Game(cfg.Ranch.RegionCode)
 
 	// 授权中心 + 会话
 	authSvc := authcenter.NewService(conns.Auth,
@@ -64,6 +64,7 @@ func main() {
 		time.Duration(cfg.Auth.TokenRefreshHours)*time.Hour)
 	sessions := auth.NewManager(authSvc)
 	authSvc.SetSessions(sessions)
+	authSvc.SetScope(regionPerm, cfg.Ranch.RegionCode)
 
 	// 导出时的枚举翻译(meta_enum_item)
 	var labeler query.EnumLabeler = func(code string, v int64) (string, bool) {
@@ -108,7 +109,9 @@ func main() {
 		log.Printf("未配置 databases.portal,官网模块接口(/portal/*)未挂载")
 	}
 
-	handler := httpx.Chain(mux, httpx.Recover, httpx.Logging, httpx.CORS, sessions.Authenticate)
+	// 顺序:恢复 → 日志 → 跨域 → 解析会话 → 区域权限(登出 / 个人中心等账号级接口豁免)
+	handler := httpx.Chain(mux, httpx.Recover, httpx.Logging, httpx.CORS, sessions.Authenticate,
+		auth.RequireScope(regionPerm, "/logout", "/me/"))
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

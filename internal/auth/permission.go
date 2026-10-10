@@ -86,6 +86,64 @@ func (t *Tree) Check(code string) bool {
 	return true
 }
 
+// IsSuperAdmin 根通配:拥有一切。
+func (t *Tree) IsSuperAdmin() bool { return t != nil && t.Wildcard }
+
+// hasWildcardOn 从根沿 path 下钻,途中(含终点)遇到通配即 true;用于判断「能否授予 path 下的全部」。
+func (t *Tree) hasWildcardOn(path []string) bool {
+	if t == nil {
+		return false
+	}
+	node := t
+	if node.Wildcard {
+		return true
+	}
+	for _, part := range path {
+		child, ok := node.Children[part]
+		if !ok {
+			return false
+		}
+		node = child
+		if node.Wildcard {
+			return true
+		}
+	}
+	return false
+}
+
+// Covers 本树是否覆盖 other 的全部权限 —— 授予 / 管理角色时的边界:不能给出自己没有的东西。
+// other 里的通配节点要求本树在同一路径或其上游也有通配;叶子节点要求本树 Check 通过。
+func (t *Tree) Covers(other *Tree) bool {
+	if other == nil {
+		return true
+	}
+	if t != nil && t.Wildcard {
+		return true
+	}
+	return coversNode(t, other, nil)
+}
+
+func coversNode(t *Tree, node *Tree, path []string) bool {
+	if node.Wildcard {
+		return t.hasWildcardOn(path)
+	}
+	if len(node.Children) == 0 {
+		if len(path) == 0 {
+			return true // 空树
+		}
+		return t.Check(strings.Join(path, "/"))
+	}
+	for key, child := range node.Children {
+		p := make([]string, len(path)+1)
+		copy(p, path)
+		p[len(path)] = key
+		if !coversNode(t, child, p) {
+			return false
+		}
+	}
+	return true
+}
+
 // MergeTrees 合并多棵树为新树。
 func MergeTrees(trees ...*Tree) *Tree {
 	root := &Tree{}

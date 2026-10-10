@@ -32,8 +32,10 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /permission/features", httpx.H(auth.Require(perm.SystemUserView, s.handleFeatures)))
 
 	// 管理员(列表仅需登录:运营表格的"创建人/审核人"列要把 uid 翻译成用户名;不含密码与 token)
-	// 管理员列表登录即可读(运营表格里要把 createdBy / auditBy 的 uid 翻译成用户名);增删改走「用户与角色 · 可更改」
-	mux.HandleFunc("GET /system/users", httpx.H(auth.RequireLogin(s.handleListUsers)))
+	// 管理员:完整列表(含手机号 / 锁定 / 2FA 状态)要「用户与角色 · 查看」;
+	// 运营表格把 createdBy / auditBy 翻译成用户名只用 /options(仅 uid / 用户名 / 昵称),登录即可
+	mux.HandleFunc("GET /system/users/options", httpx.H(auth.RequireLogin(s.handleUserOptions)))
+	mux.HandleFunc("GET /system/users", httpx.H(auth.Require(perm.SystemUserView, s.handleListUsers)))
 	mux.HandleFunc("POST /system/users", httpx.H(auth.Require(perm.SystemUserEdit, s.handleCreateUser)))
 	mux.HandleFunc("PUT /system/users/{uid}", httpx.H(auth.Require(perm.SystemUserEdit, s.handleUpdateUser)))
 	mux.HandleFunc("DELETE /system/users/{uid}", httpx.H(auth.Require(perm.SystemUserEdit, s.handleDeleteUser)))
@@ -43,7 +45,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /system/users/{username}/reset_2fa", httpx.H(auth.Require(perm.SystemUserEdit, s.handleResetTwoFactor)))
 
 	// 角色(列表仅需登录:用户编辑器要用角色下拉)
-	mux.HandleFunc("GET /system/roles", httpx.H(auth.RequireLogin(s.handleListRoles)))
+	mux.HandleFunc("GET /system/roles", httpx.H(auth.Require(perm.SystemUserView, s.handleListRoles)))
 	mux.HandleFunc("POST /system/roles", httpx.H(auth.Require(perm.SystemUserEdit, s.handleCreateRole)))
 	mux.HandleFunc("PUT /system/roles/{role}", httpx.H(auth.Require(perm.SystemUserEdit, s.handleUpdateRole)))
 	mux.HandleFunc("DELETE /system/roles/{role}", httpx.H(auth.Require(perm.SystemUserEdit, s.handleDeleteRole)))
@@ -159,7 +161,7 @@ func (s *Service) handleTwoFactorEnable(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Service) handleTwoFactorDisable(w http.ResponseWriter, r *http.Request) error {
-	if err := s.TwoFactorDisable(r.Context(), auth.SessionFrom(r.Context()), httpx.FormValue(r, "code"), httpx.FormValue(r, "password")); err != nil {
+	if err := s.TwoFactorDisable(r.Context(), auth.SessionFrom(r.Context()), httpx.FormValue(r, "code")); err != nil {
 		return err
 	}
 	httpx.NoContent(w)
@@ -167,7 +169,7 @@ func (s *Service) handleTwoFactorDisable(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Service) handleResetTwoFactor(w http.ResponseWriter, r *http.Request) error {
-	if err := s.ResetTwoFactor(r.Context(), r.PathValue("username")); err != nil {
+	if err := s.ResetTwoFactor(r.Context(), auth.SessionFrom(r.Context()), r.PathValue("username")); err != nil {
 		return err
 	}
 	httpx.NoContent(w)
@@ -186,6 +188,15 @@ func (s *Service) handleFeatures(w http.ResponseWriter, _ *http.Request) error {
 }
 
 // ---------- 管理员 ----------
+
+func (s *Service) handleUserOptions(w http.ResponseWriter, r *http.Request) error {
+	list, err := s.repo.ListUserOptions(r.Context())
+	if err != nil {
+		return err
+	}
+	httpx.OK(w, list)
+	return nil
+}
 
 func (s *Service) handleListUsers(w http.ResponseWriter, r *http.Request) error {
 	page, size := httpx.Pagination(r)
@@ -219,7 +230,7 @@ func (s *Service) handleCreateUser(w http.ResponseWriter, r *http.Request) error
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		return err
 	}
-	u, err := s.CreateUser(r.Context(), &body.User, body.Password)
+	u, err := s.CreateUser(r.Context(), auth.SessionFrom(r.Context()), &body.User, body.Password)
 	if err != nil {
 		return err
 	}
@@ -238,7 +249,7 @@ func (s *Service) handleUpdateUser(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	body.UID = uid
-	u, err := s.UpdateUser(r.Context(), &body.User, body.Password)
+	u, err := s.UpdateUser(r.Context(), auth.SessionFrom(r.Context()), &body.User, body.Password)
 	if err != nil {
 		return err
 	}
@@ -264,7 +275,7 @@ func (s *Service) handleLockUser(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return httpx.BadRequest("lockUntilTime 非法")
 	}
-	if err := s.repo.UpdateLock(r.Context(), r.PathValue("username"), until); err != nil {
+	if err := s.LockUser(r.Context(), auth.SessionFrom(r.Context()), r.PathValue("username"), until); err != nil {
 		return err
 	}
 	httpx.NoContent(w)
@@ -272,7 +283,7 @@ func (s *Service) handleLockUser(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Service) handleUnlockUser(w http.ResponseWriter, r *http.Request) error {
-	if err := s.repo.UpdateLock(r.Context(), r.PathValue("username"), 0); err != nil {
+	if err := s.LockUser(r.Context(), auth.SessionFrom(r.Context()), r.PathValue("username"), 0); err != nil {
 		return err
 	}
 	httpx.NoContent(w)
@@ -284,7 +295,7 @@ func (s *Service) handleUpdateUserRoles(w http.ResponseWriter, r *http.Request) 
 	if err := httpx.DecodeJSON(r, &roles); err != nil {
 		return err
 	}
-	if err := s.UpdateRoles(r.Context(), r.PathValue("username"), roles); err != nil {
+	if err := s.UpdateRoles(r.Context(), auth.SessionFrom(r.Context()), r.PathValue("username"), roles); err != nil {
 		return err
 	}
 	httpx.NoContent(w)
@@ -308,7 +319,7 @@ func (s *Service) handleCreateRole(w http.ResponseWriter, r *http.Request) error
 	if err := httpx.DecodeJSON(r, &rl); err != nil {
 		return err
 	}
-	if err := s.SaveRole(r.Context(), &rl, true); err != nil {
+	if err := s.SaveRole(r.Context(), auth.SessionFrom(r.Context()), &rl, true); err != nil {
 		return err
 	}
 	httpx.OK(w, rl)
@@ -321,7 +332,7 @@ func (s *Service) handleUpdateRole(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 	rl.Role = r.PathValue("role")
-	if err := s.SaveRole(r.Context(), &rl, false); err != nil {
+	if err := s.SaveRole(r.Context(), auth.SessionFrom(r.Context()), &rl, false); err != nil {
 		return err
 	}
 	httpx.OK(w, rl)
@@ -329,7 +340,7 @@ func (s *Service) handleUpdateRole(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *Service) handleDeleteRole(w http.ResponseWriter, r *http.Request) error {
-	if err := s.DeleteRole(r.Context(), r.PathValue("role")); err != nil {
+	if err := s.DeleteRole(r.Context(), auth.SessionFrom(r.Context()), r.PathValue("role")); err != nil {
 		return err
 	}
 	httpx.NoContent(w)

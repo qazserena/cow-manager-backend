@@ -16,6 +16,7 @@ import (
 
 	"cow-manager-backend/internal/auth"
 	"cow-manager-backend/internal/httpx"
+	"cow-manager-backend/internal/perm"
 )
 
 // Service 概览服务。portal 可为 nil(未配置官网库)。
@@ -38,12 +39,71 @@ func NewService(game, logdb, gms, portal *sqlx.DB, loc *time.Location) *Service 
 	return &Service{game: game, logdb: logdb, gms: gms, portal: portal, loc: loc}
 }
 
-// Register 挂载路由(登录即可看)。
+// Register 挂载路由(登录即可看,但只下发有「查看」权限的板块)。
 func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /dashboard/summary", httpx.H(auth.RequireLogin(func(w http.ResponseWriter, r *http.Request) error {
-		httpx.OK(w, s.summary(r.Context(), httpx.QueryBool(r, "refresh")))
+		httpx.OK(w, s.summary(r.Context(), httpx.QueryBool(r, "refresh")).forSession(auth.SessionFrom(r.Context())))
 		return nil
 	})))
+}
+
+// auditFeature 待审核模块 → 功能 key。
+var auditFeature = map[string]string{"mail": "mail", "group-mail": "group-mail", "check-in": "game-config", "guild-battle": "guild-battle"}
+
+// forSession 按权限裁剪副本:没有相应功能「查看」权限的板块置空 / 归零,缓存里的原件不动。
+func (sum *Summary) forSession(sess *auth.Session) *Summary {
+	anyOf := func(codes ...string) bool {
+		for _, c := range codes {
+			if sess.Has(c) {
+				return true
+			}
+		}
+		return false
+	}
+	game := anyOf(perm.RanchUserView, perm.RanchGuildView, perm.AnalysisView)
+	portal := anyOf(perm.PortalUserView, perm.PortalSocialView, perm.PortalInviteView)
+
+	out := *sum
+	if !game {
+		out.Game = nil
+	}
+	if !portal {
+		out.Portal = nil
+	}
+	if sum.Ops != nil {
+		ops := *sum.Ops
+		ops.PendingAudits = map[string]int64{}
+		for k, v := range sum.Ops.PendingAudits {
+			if sess.Has(perm.View(auditFeature[k])) {
+				ops.PendingAudits[k] = v
+			}
+		}
+		if !sess.Has(perm.TaskView) {
+			ops.Tasks = []TaskHealth{}
+		}
+		if !sess.Has(perm.PortalSocialView) {
+			ops.SocialErrors = 0
+		}
+		if !sess.Has(perm.PortalInviteView) {
+			ops.InviteFlagged, ops.InviteFlaggedToday = 0, 0
+		}
+		out.Ops = &ops
+	}
+	if !game || !portal {
+		trend := make([]*TrendPoint, 0, len(sum.Trend))
+		for _, t := range sum.Trend {
+			c := *t
+			if !game {
+				c.DNU, c.DAU, c.Games = 0, 0, 0
+			}
+			if !portal {
+				c.Trades, c.InviteBinds, c.SocialBinds, c.Points = 0, 0, 0, 0
+			}
+			trend = append(trend, &c)
+		}
+		out.Trend = trend
+	}
+	return &out
 }
 
 // Summary 概览全部数据。

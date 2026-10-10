@@ -63,6 +63,20 @@ func (r *Repo) ListUsers(ctx context.Context, usernameLike string, page, size in
 	return list, total, nil
 }
 
+// UserOption 给表格翻译 uid → 用户名用的精简行,不含手机号 / 状态等。
+type UserOption struct {
+	UID      int64  `db:"uid" json:"uid"`
+	Username string `db:"username" json:"username"`
+	Nickname string `db:"nickname" json:"nickname"`
+}
+
+// ListUserOptions 全部管理员的 uid / 用户名 / 昵称。
+func (r *Repo) ListUserOptions(ctx context.Context) ([]UserOption, error) {
+	list := []UserOption{}
+	err := r.db.SelectContext(ctx, &list, "SELECT uid, username, nickname FROM `user` ORDER BY uid")
+	return list, err
+}
+
 // CreateUser 插入用户,返回 uid。
 func (r *Repo) CreateUser(ctx context.Context, u *User) (int64, error) {
 	u.RolesRaw = encodeRoles(u.Roles)

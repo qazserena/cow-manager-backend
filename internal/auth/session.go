@@ -26,6 +26,9 @@ type Session struct {
 // Has 是否拥有权限码。
 func (s *Session) Has(code string) bool { return s != nil && s.Tree.Check(code) }
 
+// IsSuperAdmin 根通配。
+func (s *Session) IsSuperAdmin() bool { return s != nil && s.Tree.IsSuperAdmin() }
+
 // Expired 令牌是否过期(毫秒时间戳)。
 func (s *Session) Expired(now time.Time) bool {
 	return s.TokenExpireTick > 0 && s.TokenExpireTick <= now.UnixMilli()
@@ -158,6 +161,30 @@ func (m *Manager) Authenticate(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RequireScope 全局中间件:已登录的请求必须拥有 code(本部署的区域权限 game/ranch/{region}),否则 403。
+// 这样区域权限在后端也是硬约束,而不只是前端藏起区域切换项(dev / prod 共用授权库,token 通用)。
+// 未登录的请求放行给各路由自己处理(登录 / 健康检查);exempt 前缀(登出、个人中心等账号级接口)不检查。
+func RequireScope(code string, exempt ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if s := SessionFrom(r.Context()); s != nil && !s.Has(code) {
+				skip := false
+				for _, prefix := range exempt {
+					if strings.HasPrefix(r.URL.Path, prefix) {
+						skip = true
+						break
+					}
+				}
+				if !skip {
+					httpx.WriteError(w, httpx.NewError(httpx.CodePermissionDenied, "该账号没有本区域的访问权限"))
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // RequireLogin 要求已登录。

@@ -64,17 +64,17 @@ internal/portalapi           官网后端公开接口的小客户端:拉 /invite
 
 | 分组 | 路径 |
 |---|---|
-| 登录 | `POST /login`（body `{username,password,otp?}`；账号开启二步验证而未带 `otp` 返回 `{"code":206}`，验证码错误 `207`）`POST /login-with-token` `POST /logout` |
-| 个人中心 | `POST /me/change-password` `/me/update-profile` `/me/update-settings`（form）；二步验证：`POST /me/2fa/setup`（返回 `{secret,uri}` 出二维码，10 分钟内确认）`POST /me/2fa/enable`（form `code`）`POST /me/2fa/disable`（form `code` 或 `password` 二选一） |
+| 登录 | `POST /login`（body `{username,password,otp?}`；账号开启二步验证而未带 `otp` 返回 `{"code":206}`，验证码错误 `207`；账号没有本部署区域的权限返回 `403 {"code":100}`）`POST /login-with-token` `POST /logout` |
+| 个人中心 | `POST /me/change-password` `/me/update-profile` `/me/update-settings`（form）；二步验证：`POST /me/2fa/setup`（返回 `{secret,uri}` 出二维码，10 分钟内确认）`POST /me/2fa/enable`（form `code`）`POST /me/2fa/disable`（form `code`，只认验证码） |
 | 权限 | `GET /permission/tree` `GET /permission/features`（功能清单，角色编辑器的「查看 / 可更改」矩阵） |
-| 概览 | `GET /dashboard/summary`（`?refresh=1` 跳过 60 秒缓存；登录即可）|
-| 管理员 | `GET/POST /system/users` `PUT/DELETE /system/users/{uid}` `POST /system/users/{username}/lock\|unlock\|update_role\|reset_2fa`（`reset_2fa` 清空对方认证器并使其会话失效） |
-| 角色 | `GET/POST /system/roles` `PUT/DELETE /system/roles/{role}` |
+| 概览 | `GET /dashboard/summary`（`?refresh=1` 跳过 60 秒缓存；登录即可，但按权限裁剪：没有游戏 / 官网 / 任务等相应「查看」权限的板块置空或归零）|
+| 管理员 | `GET /system/users/options`（仅 uid / 用户名 / 昵称，登录即可，供表格翻译创建人 / 审核人）；`GET /system/users`（完整列表，需 `system-user/view`）`POST /system/users` `PUT/DELETE /system/users/{uid}` `POST /system/users/{username}/lock\|unlock\|update_role\|reset_2fa`（写操作需 `system-user/edit`，且受下文「授权边界」约束） |
+| 角色 | `GET /system/roles`（需 `system-user/view`）`POST /system/roles` `PUT/DELETE /system/roles/{role}`（需 `system-user/edit` + 授权边界） |
 | 多语言 | `GET /locale/language` `/languages`（只有 `zhCN` `enUS`）`/query?lang=` `POST /locale/language` `PUT /locale/language/{langKey}`（upsert）`DELETE /locale/language/{langKey}` |
 | 枚举 | `GET /meta/enum` `GET /meta/enum/{code}`（表格枚举列翻译用，登录即可）；写接口仍在但前端已不再提供编辑入口 |
 | 区域 / 模板 | `GET /config/info` `GET /template/item` |
 | 运营配置 | `{m}` ∈ `mail` `group-mail` `check-in` `guild-battle`：`GET/POST /{m}` `GET/PUT/DELETE /{m}/{id}` `GET /{m}/export` `POST /{m}/sync` `POST /{m}/approval?ids=` `POST /{m}/reject?ids=` `POST /{m}/{id}/approval\|reject\|enable\|disable` |
-| 游戏服代理 | `/proxy/admin/...`（自动签名转发到 login 服务） |
+| 游戏服代理 | 只放行白名单：`GET /proxy/admin/config/queryAllConfig`（`game-config/view`）`POST /proxy/admin/config/saveConfig`（`game-config/edit`），其它路径一律 403 |
 | 游戏数据 | `GET /ranch/users[/{uid}\|/export]` `/ranch/guilds[/{guildId}\|/export]` `/ranch/guild-dict` `/ranch/guild-battles` `/ranch/bullring-logs` |
 | 统计 | `GET /analysis/bullring-count` `/bullring-rewards` `/user` `/retention`（均有 `/export`） |
 | 任务 | `GET /task/list` `GET /task/log?className=` `POST /task/enableOrDisableTask` `/task/updateCronTrigger` `/task/manualSchedule` |
@@ -97,14 +97,22 @@ internal/portalapi           官网后端公开接口的小客户端:拉 /invite
 
 功能 key（`internal/perm.Features`，也是 `GET /permission/features` 的返回）：`ranch-user` `ranch-guild`（纯查询）、`mail` `group-mail` `game-config`（签到 + 游戏服参数 / 代理）`guild-battle`、`analysis`（全部报表，纯查询）、`portal-user` `portal-social` `portal-invite`、`task`、`system-setting`（多语言）、`system-user`（用户与角色）。
 根通配 `{"code":"","wildcard":true}` 为超级管理员；`feature` 节点通配 = 全部功能可更改（含未来新增）；`game/ranch` 通配 = 全部区域。
-`/dashboard/summary` `/config/info` `/template/item` `/system/users`(GET) `/system/roles`(GET) `/meta/enum`(GET) `/locale/language/query|languages` 登录即可。
-旧的 `service/*` `table/*` `function/*` 码已废弃，角色迁移脚本见 `cow-startup/SQL2.0/migrations/2026-10-10_gms_feature_permissions.sql`（内置 `ADMIN` 超管、`ALL` 全功能可更改、`VIEWER` 全功能只读）。
+`/dashboard/summary`（按权限裁剪）`/config/info` `/template/item` `/system/users/options` `/meta/enum`(GET) `/locale/language/query|languages` 登录即可。
+旧的 `service/*` `table/*` `function/*` 码已废弃，角色迁移脚本见 `cow-startup/SQL2.0/migrations/2026-10-10_gms_feature_permissions.sql`（内置 `ADMIN` 超管、`ALL` 全功能可更改、`VIEWER` 全功能只读）；内置 `admin` 账号挂 `ADMIN`（`2026-10-10_gms_admin_superuser.sql`）。
+
+**区域是后端硬约束。** 登录时账号必须拥有本部署的 `game/ranch/{regionCode}`，否则直接拒绝；已登录的请求由全局中间件 `auth.RequireScope` 再校验一次（`/logout` `/me/*` 豁免）。dev / prod 共用授权库、token 通用，所以不能只靠前端藏区域。
+
+**授权边界（`Tree.Covers`）：不能给出自己没有的东西。** 持有 `system-user/edit` 的人：
+- 新建 / 修改角色时，新权限树必须 ⊆ 自己的权限；修改 / 删除已有角色时，该角色原有权限也必须 ⊆ 自己的（防止低权限者削掉高权限角色）；`ADMIN` 角色只有超级管理员能改。
+- 新建用户、改角色、改资料 / 重置密码、锁定、重置 2FA、删除：目标账号现有权限必须 ⊆ 自己的，分配的新角色也必须 ⊆ 自己的。
+- 不能改自己的角色、不能锁定 / 删除自己；内置 `admin` / `root` 账号不可删、角色不可改。
+因此只有超级管理员能创建另一个超级管理员；`ALL` 能管一切功能，但管不了 `ADMIN` 角色和 `ADMIN` 账号。
 
 ## 二步验证
 
 TOTP（RFC 6238，SHA1 / 6 位 / 30 秒，±1 步容差），与 Google / Microsoft Authenticator、1Password 等兼容，密钥存 `user.twoStepSecret`（空 = 未开启）。
 绑定流程：`/me/2fa/setup` 生成待确认密钥（仅内存，10 分钟）→ 用户扫码后用当前验证码调 `/me/2fa/enable` 才落库。开启后 `/login` 必须带 `otp`。
-关闭：本人 `/me/2fa/disable`（验证码或密码二选一）；丢失认证器由有「用户与角色 · 可更改」权限的管理员 `POST /system/users/{username}/reset_2fa`。
+关闭：本人 `/me/2fa/disable` 只认当前验证码（密码不能替代，否则 token 被盗 + 密码泄露即可拆掉第二道锁）；丢失认证器由权限覆盖该账号的管理员 `POST /system/users/{username}/reset_2fa`。
 
 ## 与 Java 版的行为差异
 
