@@ -25,11 +25,11 @@ func (s *Service) Register(mux *http.ServeMux) {
 		return nil
 	})))
 
-	// 游戏服透传:/proxy/admin/config/queryAllConfig 等
+	// 游戏服透传:/proxy/admin/config/queryAllConfig 等 —— 读走「游戏配置 · 查看」,写走「游戏配置 · 可更改」
 	mux.HandleFunc("/proxy/", httpx.H(func(w http.ResponseWriter, r *http.Request) error {
-		code := perm.GmsGet
+		code := perm.GameConfigView
 		if r.Method != http.MethodGet {
-			code = perm.GmsPost
+			code = perm.GameConfigEdit
 		}
 		return auth.Require(code, func(w http.ResponseWriter, r *http.Request) error {
 			target := strings.TrimPrefix(r.URL.Path, "/proxy")
@@ -45,18 +45,30 @@ func (s *Service) Register(mux *http.ServeMux) {
 	}
 }
 
+// moduleFeature 运营模块 → 功能权限 key(签到配置归到「游戏配置」页)。
+var moduleFeature = map[string]string{
+	"mail":         "mail",
+	"group-mail":   "group-mail",
+	"check-in":     "game-config",
+	"guild-battle": "guild-battle",
+}
+
 // registerModule 为一个运营模块挂载列表/增删改/审核/激活/同步/导出。
+// 列表 / 详情 / 导出 → feature/{key}/view;新建 / 修改 / 删除 / 审核 / 激活 / 同步 → feature/{key}/edit。
 func (s *Service) registerModule(mux *http.ServeMux, module string, spec *query.Spec) {
-	table := auditTables[module]
-	label := spec.Table
+	feature := moduleFeature[module]
+	if feature == "" {
+		feature = module
+	}
+	view, edit := perm.View(feature), perm.Edit(feature)
 	h := query.Handlers{Spec: spec, DB: s.gms, Loc: s.loc, Labeler: s.labeler}
 
-	mux.HandleFunc("GET /"+module, httpx.H(auth.RequireLogin(h.List)))
-	mux.HandleFunc("GET /"+module+"/export", httpx.H(auth.Require(perm.Table(table, "export", label), h.Export)))
-	mux.HandleFunc("GET /"+module+"/{id}", httpx.H(auth.RequireLogin(h.One("id"))))
-	mux.HandleFunc("POST /"+module, httpx.H(auth.Require(perm.Table(table, "create", label), s.createHandler(module))))
-	mux.HandleFunc("PUT /"+module+"/{id}", httpx.H(auth.Require(perm.Table(table, "update", label), s.updateHandler(module))))
-	mux.HandleFunc("DELETE /"+module+"/{id}", httpx.H(auth.Require(perm.Table(table, "delete", label), func(w http.ResponseWriter, r *http.Request) error {
+	mux.HandleFunc("GET /"+module, httpx.H(auth.Require(view, h.List)))
+	mux.HandleFunc("GET /"+module+"/export", httpx.H(auth.Require(view, h.Export)))
+	mux.HandleFunc("GET /"+module+"/{id}", httpx.H(auth.Require(view, h.One("id"))))
+	mux.HandleFunc("POST /"+module, httpx.H(auth.Require(edit, s.createHandler(module))))
+	mux.HandleFunc("PUT /"+module+"/{id}", httpx.H(auth.Require(edit, s.updateHandler(module))))
+	mux.HandleFunc("DELETE /"+module+"/{id}", httpx.H(auth.Require(edit, func(w http.ResponseWriter, r *http.Request) error {
 		id, err := httpx.PathInt64(r, "id")
 		if err != nil {
 			return err
@@ -68,7 +80,7 @@ func (s *Service) registerModule(mux *http.ServeMux, module string, spec *query.
 		return nil
 	})))
 
-	mux.HandleFunc("POST /"+module+"/sync", httpx.H(auth.Require(perm.GmsSync, func(w http.ResponseWriter, r *http.Request) error {
+	mux.HandleFunc("POST /"+module+"/sync", httpx.H(auth.Require(edit, func(w http.ResponseWriter, r *http.Request) error {
 		resp, err := s.Sync(r.Context(), module)
 		if err != nil {
 			return httpx.NewError(httpx.CodeOperationFailed, "同步失败: "+err.Error())
@@ -93,8 +105,8 @@ func (s *Service) registerModule(mux *http.ServeMux, module string, spec *query.
 			return nil
 		})
 	}
-	mux.HandleFunc("POST /"+module+"/approval", httpx.H(audit(AuditApproval, perm.GmsApproval)))
-	mux.HandleFunc("POST /"+module+"/reject", httpx.H(audit(AuditReject, perm.GmsReject)))
+	mux.HandleFunc("POST /"+module+"/approval", httpx.H(audit(AuditApproval, edit)))
+	mux.HandleFunc("POST /"+module+"/reject", httpx.H(audit(AuditReject, edit)))
 	auditOne := func(status int, code string) httpx.HandlerFunc {
 		return auth.Require(code, func(w http.ResponseWriter, r *http.Request) error {
 			id, err := httpx.PathInt64(r, "id")
@@ -108,8 +120,8 @@ func (s *Service) registerModule(mux *http.ServeMux, module string, spec *query.
 			return nil
 		})
 	}
-	mux.HandleFunc("POST /"+module+"/{id}/approval", httpx.H(auditOne(AuditApproval, perm.GmsApproval)))
-	mux.HandleFunc("POST /"+module+"/{id}/reject", httpx.H(auditOne(AuditReject, perm.GmsReject)))
+	mux.HandleFunc("POST /"+module+"/{id}/approval", httpx.H(auditOne(AuditApproval, edit)))
+	mux.HandleFunc("POST /"+module+"/{id}/reject", httpx.H(auditOne(AuditReject, edit)))
 	active := func(on bool, code string) httpx.HandlerFunc {
 		return auth.Require(code, func(w http.ResponseWriter, r *http.Request) error {
 			id, err := httpx.PathInt64(r, "id")
@@ -123,8 +135,8 @@ func (s *Service) registerModule(mux *http.ServeMux, module string, spec *query.
 			return nil
 		})
 	}
-	mux.HandleFunc("POST /"+module+"/{id}/enable", httpx.H(active(true, perm.GmsEnable)))
-	mux.HandleFunc("POST /"+module+"/{id}/disable", httpx.H(active(false, perm.GmsDisable)))
+	mux.HandleFunc("POST /"+module+"/{id}/enable", httpx.H(active(true, edit)))
+	mux.HandleFunc("POST /"+module+"/{id}/disable", httpx.H(active(false, edit)))
 }
 
 func (s *Service) createHandler(module string) httpx.HandlerFunc {

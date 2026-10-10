@@ -27,11 +27,11 @@ import (
 	"cow-manager-backend/internal/query"
 )
 
-// 权限码:自成一组 service/portal-social/*。
+// 权限:只读 = feature/portal-social/view(含导出);刷新 / 快照 = feature/portal-social/edit。
 var (
-	PermView   = perm.Registry.Register("service/portal-social/view", "查看社交媒体运营数据", "官网社交媒体")
-	PermExport = perm.Registry.Register("service/portal-social/export", "导出社交账号", "官网社交媒体")
-	PermManage = perm.Registry.Register("service/portal-social/manage", "手动刷新 / 快照官方渠道数据", "官网社交媒体")
+	PermView   = perm.PortalSocialView
+	PermExport = perm.PortalSocialView
+	PermManage = perm.PortalSocialEdit
 )
 
 // Platforms 展示顺序,与官网 model.SocialPlatforms 一致。

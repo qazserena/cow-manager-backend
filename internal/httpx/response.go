@@ -29,6 +29,8 @@ const (
 	CodeAccountLocked    = 203
 	CodeAccountExpired   = 204
 	CodeUsernameExist    = 205
+	CodeOtpRequired      = 206 // 已开启二步验证,登录需带验证码
+	CodeOtpInvalid       = 207 // 验证码错误
 	CodeRoleExist        = 210
 )
 

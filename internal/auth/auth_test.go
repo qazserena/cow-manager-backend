@@ -64,12 +64,12 @@ func TestPermissionTree(t *testing.T) {
 
 func TestRegistryTree(t *testing.T) {
 	r := NewRegistry()
-	r.Register("service/gms-ranch/sync", "同步", "牧场管理")
-	r.Register("service/gms-ranch/approval", "审核")
+	r.Register("feature/mail/view", "查看", "运营管理 · 邮件")
+	r.Register("feature/mail/edit", "可更改")
 	tree := r.Tree()
 	b, _ := json.Marshal(tree)
 	s := string(b)
-	for _, want := range []string{`"code":"service"`, `"name":"服务"`, `"name":"牧场管理"`, `"name":"同步"`, `"name":"审核"`} {
+	for _, want := range []string{`"code":"feature"`, `"name":"功能"`, `"name":"运营管理 · 邮件"`, `"name":"查看"`, `"name":"可更改"`} {
 		if !contains(s, want) {
 			t.Fatalf("定义树缺少 %s: %s", want, s)
 		}

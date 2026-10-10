@@ -25,15 +25,24 @@ type User struct {
 	TokenExpireTick int64  `db:"tokenExpireTick" json:"tokenExpireTick"`
 	PhoneNumber     string `db:"phoneNumber" json:"phoneNumber"`
 	Settings        string `db:"settings" json:"settings"`
+	TwoStepSecret   string `db:"twoStepSecret" json:"-"`
 
 	Roles          []string   `db:"-" json:"roles"`
 	PermissionTree *auth.Tree `db:"-" json:"permissionTree,omitempty"`
+	// TwoFactorEnabled 是否已开启二步验证(由 twoStepSecret 是否为空推出,只读)
+	TwoFactorEnabled bool `db:"-" json:"twoFactorEnabled"`
+}
+
+// fill 填充派生字段。
+func (u *User) fill() {
+	u.Roles = parseRoles(u.RolesRaw)
+	u.TwoFactorEnabled = u.TwoStepSecret != ""
 }
 
 // 用户表的查询列(registerTime 可能为 NULL)。
 const userColumns = "uid, username, nickname, avatar, passwordHash, passwordSalt, note, roles, " +
 	"IFNULL(DATE_FORMAT(registerTime, '%Y-%m-%d %H:%i:%s'), '') AS registerTime, " +
-	"expireTick, lockUntilTick, token, tokenExpireTick, phoneNumber, settings"
+	"expireTick, lockUntilTick, token, tokenExpireTick, phoneNumber, settings, twoStepSecret"
 
 // parseRoles 兼容 JSON 数组与逗号分隔两种历史写法。
 func parseRoles(raw string) []string {
@@ -77,8 +86,8 @@ type Role struct {
 // Localization 多语言行,键为 langKey,其余为各语言列。
 type Localization = map[string]any
 
-// 支持的语言列,与 localization 表列名一致。
-var languageColumns = []string{"zhCN", "enUS", "ruRU", "deDE", "frFR"}
+// 支持的语言列,与 localization 表列名一致。产品只保留简体中文与英文;表里历史的 ruRU/deDE/frFR 列不再读写。
+var languageColumns = []string{"zhCN", "enUS"}
 
 func isLanguage(col string) bool {
 	for _, c := range languageColumns {

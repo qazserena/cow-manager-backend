@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -12,17 +13,29 @@ import (
 	"cow-manager-backend/internal/httpx"
 )
 
+// totpIssuer 认证器 App 里显示的签发方。
+const totpIssuer = "CowGalaxy GMS"
+
+// pendingTOTP 正在绑定、尚未用验证码确认的密钥(只在内存,确认后才落库)。
+type pendingTOTP struct {
+	secret string
+	exp    time.Time
+}
+
 // Service 登录与会话逻辑;同时实现 auth.Loader。
 type Service struct {
 	repo       *Repo
 	tokenTTL   time.Duration
 	refreshTTL time.Duration
 	sessions   *auth.Manager
+
+	totpMu      sync.Mutex
+	totpPending map[int64]pendingTOTP
 }
 
 // NewService 创建服务;sessions 在 New 之后由 main 注入(存在相互依赖)。
 func NewService(db *sqlx.DB, tokenTTL, refreshTTL time.Duration) *Service {
-	return &Service{repo: &Repo{db: db}, tokenTTL: tokenTTL, refreshTTL: refreshTTL}
+	return &Service{repo: &Repo{db: db}, tokenTTL: tokenTTL, refreshTTL: refreshTTL, totpPending: map[int64]pendingTOTP{}}
 }
 
 // Repo 暴露数据访问,供其他模块(如导出枚举翻译)复用。
@@ -50,7 +63,8 @@ func (s *Service) buildTree(ctx context.Context, roles []string) (*auth.Tree, er
 }
 
 // Login 用户名密码登录,返回带 token 与权限树的用户。
-func (s *Service) Login(ctx context.Context, username, password string) (*User, error) {
+// 已开启二步验证的账号必须同时提供 otp:缺失返回 CodeOtpRequired(前端据此弹出验证码框),错误返回 CodeOtpInvalid。
+func (s *Service) Login(ctx context.Context, username, password, otp string) (*User, error) {
 	u, err := s.repo.UserByUsername(ctx, username)
 	if err != nil {
 		return nil, err
@@ -67,6 +81,14 @@ func (s *Service) Login(ctx context.Context, username, password string) (*User, 
 	}
 	if u.ExpireTick > 0 && u.ExpireTick <= now {
 		return nil, httpx.NewError(httpx.CodeAccountExpired, "账号已过期")
+	}
+	if u.TwoStepSecret != "" {
+		if strings.TrimSpace(otp) == "" {
+			return nil, httpx.NewError(httpx.CodeOtpRequired, "请输入认证器验证码")
+		}
+		if !auth.VerifyTOTP(u.TwoStepSecret, otp, time.Now()) {
+			return nil, httpx.NewError(httpx.CodeOtpInvalid, "验证码错误或已过期")
+		}
 	}
 	// 与 Java 一致:token 为空或剩余有效期不足一半时才换新 token
 	if u.Token == "" || u.TokenExpireTick-now < s.refreshTTL.Milliseconds() {
@@ -138,6 +160,76 @@ func (s *Service) ChangePassword(ctx context.Context, uid int64, oldPassword, ne
 		return httpx.NewError(httpx.CodePasswordMismatch, "旧密码错误")
 	}
 	return s.setPassword(ctx, uid, newPassword)
+}
+
+// ---------- 二步验证(TOTP) ----------
+
+// TwoFactorSetup 生成一把待确认的密钥,返回给前端出二维码;10 分钟内不确认即作废,不影响现有设置。
+func (s *Service) TwoFactorSetup(ctx context.Context, sess *auth.Session) (secret, uri string, err error) {
+	secret, err = auth.NewTOTPSecret()
+	if err != nil {
+		return "", "", err
+	}
+	s.totpMu.Lock()
+	s.totpPending[sess.UID] = pendingTOTP{secret: secret, exp: time.Now().Add(10 * time.Minute)}
+	s.totpMu.Unlock()
+	return secret, auth.TOTPURI(totpIssuer, sess.Username, secret), nil
+}
+
+// TwoFactorEnable 用认证器当前验证码确认绑定,确认通过才把密钥落库。
+func (s *Service) TwoFactorEnable(ctx context.Context, sess *auth.Session, code string) error {
+	s.totpMu.Lock()
+	p, ok := s.totpPending[sess.UID]
+	s.totpMu.Unlock()
+	if !ok || time.Now().After(p.exp) {
+		return httpx.NewError(httpx.CodeOperationFailed, "绑定已过期,请重新生成二维码")
+	}
+	if !auth.VerifyTOTP(p.secret, code, time.Now()) {
+		return httpx.NewError(httpx.CodeOtpInvalid, "验证码错误,请确认手机时间准确后重试")
+	}
+	if err := s.repo.UpdateTwoStepSecret(ctx, sess.UID, p.secret); err != nil {
+		return err
+	}
+	s.totpMu.Lock()
+	delete(s.totpPending, sess.UID)
+	s.totpMu.Unlock()
+	return nil
+}
+
+// TwoFactorDisable 本人关闭二步验证:需要当前验证码或登录密码二选一(手机丢了可用密码;密码泄露但手机在也拦得住)。
+func (s *Service) TwoFactorDisable(ctx context.Context, sess *auth.Session, code, password string) error {
+	u, err := s.repo.UserByUID(ctx, sess.UID)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		return httpx.TokenExpired()
+	}
+	if u.TwoStepSecret == "" {
+		return nil
+	}
+	okCode := code != "" && auth.VerifyTOTP(u.TwoStepSecret, code, time.Now())
+	okPwd := password != "" && auth.VerifyPassword(password, u.PasswordSalt, u.PasswordHash)
+	if !okCode && !okPwd {
+		return httpx.NewError(httpx.CodeOtpInvalid, "验证码或密码错误")
+	}
+	return s.repo.UpdateTwoStepSecret(ctx, sess.UID, "")
+}
+
+// ResetTwoFactor 管理员为他人重置(清空)二步验证,用于用户丢失认证器;重置后对方下次登录只需密码。
+func (s *Service) ResetTwoFactor(ctx context.Context, username string) error {
+	u, err := s.repo.UserByUsername(ctx, username)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		return httpx.NewError(httpx.CodeUserNotExist, "用户不存在")
+	}
+	if err := s.repo.UpdateTwoStepSecret(ctx, u.UID, ""); err != nil {
+		return err
+	}
+	s.sessions.InvalidateUser(u.UID)
+	return nil
 }
 
 func (s *Service) setPassword(ctx context.Context, uid int64, password string) error {

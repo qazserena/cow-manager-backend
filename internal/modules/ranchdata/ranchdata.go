@@ -116,20 +116,21 @@ var BullringLogSpec = &query.Spec{
 	},
 }
 
-// Register 挂载路由。列表仅需登录,导出需 table/{表}/export。
+// Register 挂载路由。全部只读:玩家相关走「用户查询 · 查看」,公会相关走「公会查询 · 查看」,
+// 斗牛场日志属于数据分析页。
 func (s *Service) Register(mux *http.ServeMux) {
-	s.mount(mux, "/ranch/users", UserSpec, s.game, "uid", "用户")
-	s.mount(mux, "/ranch/guilds", GuildSpec, s.game, "guildId", "公会")
-	s.mount(mux, "/ranch/guild-dict", GuildDictSpec, s.game, "", "公会字典")
-	s.mount(mux, "/ranch/guild-battles", GuildBattleSpec, s.game, "id", "公会战")
-	s.mount(mux, "/ranch/bullring-logs", BullringLogSpec, s.log, "id", "斗牛场日志")
+	s.mount(mux, "/ranch/users", UserSpec, s.game, "uid", perm.RanchUserView)
+	s.mount(mux, "/ranch/guilds", GuildSpec, s.game, "guildId", perm.RanchGuildView)
+	s.mount(mux, "/ranch/guild-dict", GuildDictSpec, s.game, "", perm.RanchGuildView)
+	s.mount(mux, "/ranch/guild-battles", GuildBattleSpec, s.game, "id", perm.RanchGuildView)
+	s.mount(mux, "/ranch/bullring-logs", BullringLogSpec, s.log, "id", perm.AnalysisView)
 }
 
-func (s *Service) mount(mux *http.ServeMux, prefix string, spec *query.Spec, db *sqlx.DB, idCol, label string) {
+func (s *Service) mount(mux *http.ServeMux, prefix string, spec *query.Spec, db *sqlx.DB, idCol, code string) {
 	h := query.Handlers{Spec: spec, DB: db, Loc: s.loc, Labeler: s.labeler}
-	mux.HandleFunc("GET "+prefix, httpx.H(auth.RequireLogin(h.List)))
-	mux.HandleFunc("GET "+prefix+"/export", httpx.H(auth.Require(perm.Table(spec.Table, "export", label), h.Export)))
+	mux.HandleFunc("GET "+prefix, httpx.H(auth.Require(code, h.List)))
+	mux.HandleFunc("GET "+prefix+"/export", httpx.H(auth.Require(code, h.Export)))
 	if idCol != "" {
-		mux.HandleFunc("GET "+prefix+"/{id}", httpx.H(auth.RequireLogin(h.One(idCol))))
+		mux.HandleFunc("GET "+prefix+"/{id}", httpx.H(auth.Require(code, h.One(idCol))))
 	}
 }

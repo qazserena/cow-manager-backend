@@ -26,11 +26,11 @@ import (
 	"cow-manager-backend/internal/query"
 )
 
-// 权限码:自成一组 service/portal-user/*。
+// 权限:只读 = feature/portal-user/view(含导出);分配邀请码等 = feature/portal-user/edit。
 var (
-	PermView   = perm.Registry.Register("service/portal-user/view", "查看官网用户", "官网用户")
-	PermExport = perm.Registry.Register("service/portal-user/export", "导出官网用户", "官网用户")
-	PermManage = perm.Registry.Register("service/portal-user/manage", "管理官网用户(生成邀请码等)", "官网用户")
+	PermView   = perm.PortalUserView
+	PermExport = perm.PortalUserView
+	PermManage = perm.PortalUserEdit
 )
 
 // Service 官网用户服务。

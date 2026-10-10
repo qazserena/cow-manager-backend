@@ -89,8 +89,9 @@ func (s *Service) Register(mux *http.ServeMux) {
 	s.mount(mux, "/analysis/retention", RetentionSpec, "用户留存")
 }
 
-func (s *Service) mount(mux *http.ServeMux, prefix string, spec *query.Spec, label string) {
+// mount 列表与导出都只读,统一走「数据分析 · 查看」。
+func (s *Service) mount(mux *http.ServeMux, prefix string, spec *query.Spec, _ string) {
 	h := query.Handlers{Spec: spec, DB: s.gms, Loc: s.loc, Labeler: s.labeler}
-	mux.HandleFunc("GET "+prefix, httpx.H(auth.RequireLogin(h.List)))
-	mux.HandleFunc("GET "+prefix+"/export", httpx.H(auth.Require(perm.Table(spec.Table, "export", label), h.Export)))
+	mux.HandleFunc("GET "+prefix, httpx.H(auth.Require(perm.AnalysisView, h.List)))
+	mux.HandleFunc("GET "+prefix+"/export", httpx.H(auth.Require(perm.AnalysisView, h.Export)))
 }

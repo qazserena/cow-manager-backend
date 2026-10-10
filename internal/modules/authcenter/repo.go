@@ -25,7 +25,7 @@ func (r *Repo) userByWhere(ctx context.Context, where string, arg any) (*User, e
 	if err != nil {
 		return nil, err
 	}
-	u.Roles = parseRoles(u.RolesRaw)
+	u.fill()
 	return u, nil
 }
 
@@ -57,7 +57,7 @@ func (r *Repo) ListUsers(ctx context.Context, usernameLike string, page, size in
 		return nil, 0, err
 	}
 	for _, u := range list {
-		u.Roles = parseRoles(u.RolesRaw)
+		u.fill()
 		u.Token = ""
 	}
 	return list, total, nil
@@ -113,6 +113,12 @@ func (r *Repo) UpdateProfile(ctx context.Context, uid int64, nickname, avatar, p
 }
 
 // UpdateSettings 更新个人设置。
+// UpdateTwoStepSecret 写入 / 清空二步验证密钥(空串 = 关闭)。
+func (r *Repo) UpdateTwoStepSecret(ctx context.Context, uid int64, secret string) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE `user` SET twoStepSecret = ? WHERE uid = ?", secret, uid)
+	return err
+}
+
 func (r *Repo) UpdateSettings(ctx context.Context, uid int64, settings string) error {
 	_, err := r.db.ExecContext(ctx, "UPDATE `user` SET settings = ? WHERE uid = ?", settings, uid)
 	return err

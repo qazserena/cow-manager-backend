@@ -27,12 +27,12 @@ import (
 	"cow-manager-backend/internal/query"
 )
 
-// 权限码:自成一组 service/portal-invite/*,迁移时整组带走。
+// 权限:只读 = feature/portal-invite/view(含导出);标记 / 恢复 / 调分 = feature/portal-invite/edit。
 var (
-	PermView   = perm.Registry.Register("service/portal-invite/view", "查看邀请数据", "官网邀请计划")
-	PermExport = perm.Registry.Register("service/portal-invite/export", "导出邀请数据", "官网邀请计划")
-	PermFlag   = perm.Registry.Register("service/portal-invite/flag", "标记 / 恢复邀请关系", "官网邀请计划")
-	PermAdjust = perm.Registry.Register("service/portal-invite/adjust", "手动调整积分", "官网邀请计划")
+	PermView   = perm.PortalInviteView
+	PermExport = perm.PortalInviteView
+	PermFlag   = perm.PortalInviteEdit
+	PermAdjust = perm.PortalInviteEdit
 )
 
 // 管理动作写入 u_invite_point_log 的 kind;官网结算只认 bind/activate/valid/joined/milestone,不会碰这类流水。

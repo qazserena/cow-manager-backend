@@ -36,7 +36,7 @@ cmd/gms/main.go              组合根:连库、挂路由、启动调度与 HTTP
 internal/config              JSON 配置 + 环境变量覆盖
 internal/httpx               错误码/JSON 响应/参数解析/CORS 等中间件
 internal/auth                密码(sha1+盐)、令牌、权限树、会话缓存与鉴权中间件
-internal/perm                全部权限码及其中文名(构成 /permission/tree)
+internal/perm                功能清单与权限码(feature/{key}/view|edit、game/ranch/{region})
 internal/query               只读列表助手:列白名单 → 过滤/排序/分页/CSV 导出
 internal/modules/authcenter  登录、个人中心、管理员、角色、多语言、枚举元数据
 internal/modules/gms         邮件/群邮件/签到/公会战配置的增删改、审核、激活、同步;游戏服签名与代理
@@ -64,26 +64,47 @@ internal/portalapi           官网后端公开接口的小客户端:拉 /invite
 
 | 分组 | 路径 |
 |---|---|
-| 登录 | `POST /login` `POST /login-with-token` `POST /logout` |
-| 个人中心 | `POST /me/change-password` `/me/update-profile` `/me/update-settings`（form） |
-| 权限 | `GET /permission/tree` |
+| 登录 | `POST /login`（body `{username,password,otp?}`；账号开启二步验证而未带 `otp` 返回 `{"code":206}`，验证码错误 `207`）`POST /login-with-token` `POST /logout` |
+| 个人中心 | `POST /me/change-password` `/me/update-profile` `/me/update-settings`（form）；二步验证：`POST /me/2fa/setup`（返回 `{secret,uri}` 出二维码，10 分钟内确认）`POST /me/2fa/enable`（form `code`）`POST /me/2fa/disable`（form `code` 或 `password` 二选一） |
+| 权限 | `GET /permission/tree` `GET /permission/features`（功能清单，角色编辑器的「查看 / 可更改」矩阵） |
 | 概览 | `GET /dashboard/summary`（`?refresh=1` 跳过 60 秒缓存；登录即可）|
-| 管理员 | `GET/POST /system/users` `PUT/DELETE /system/users/{uid}` `POST /system/users/{username}/lock\|unlock\|update_role` |
+| 管理员 | `GET/POST /system/users` `PUT/DELETE /system/users/{uid}` `POST /system/users/{username}/lock\|unlock\|update_role\|reset_2fa`（`reset_2fa` 清空对方认证器并使其会话失效） |
 | 角色 | `GET/POST /system/roles` `PUT/DELETE /system/roles/{role}` |
-| 多语言 | `GET /locale/language` `/languages` `/query?lang=` `POST /locale/language` `PUT/DELETE /locale/language/{langKey}` |
-| 枚举 | `GET/POST /meta/enum` `PUT/DELETE /meta/enum/{code}` `GET/POST /meta/enum/{code}` `PUT/DELETE /meta/enum/{code}/{itemCode}` |
+| 多语言 | `GET /locale/language` `/languages`（只有 `zhCN` `enUS`）`/query?lang=` `POST /locale/language` `PUT /locale/language/{langKey}`（upsert）`DELETE /locale/language/{langKey}` |
+| 枚举 | `GET /meta/enum` `GET /meta/enum/{code}`（表格枚举列翻译用，登录即可）；写接口仍在但前端已不再提供编辑入口 |
 | 区域 / 模板 | `GET /config/info` `GET /template/item` |
 | 运营配置 | `{m}` ∈ `mail` `group-mail` `check-in` `guild-battle`：`GET/POST /{m}` `GET/PUT/DELETE /{m}/{id}` `GET /{m}/export` `POST /{m}/sync` `POST /{m}/approval?ids=` `POST /{m}/reject?ids=` `POST /{m}/{id}/approval\|reject\|enable\|disable` |
 | 游戏服代理 | `/proxy/admin/...`（自动签名转发到 login 服务） |
 | 游戏数据 | `GET /ranch/users[/{uid}\|/export]` `/ranch/guilds[/{guildId}\|/export]` `/ranch/guild-dict` `/ranch/guild-battles` `/ranch/bullring-logs` |
 | 统计 | `GET /analysis/bullring-count` `/bullring-rewards` `/user` `/retention`（均有 `/export`） |
 | 任务 | `GET /task/list` `GET /task/log?className=` `POST /task/enableOrDisableTask` `/task/updateCronTrigger` `/task/manualSchedule` |
-| 官网邀请计划（需配置 `databases.portal`） | 口径：`GET /portal/invite/rules`（代理官网 `/invite/rules`）；报表：`GET /portal/invite/overview` `/trend?days=` `/leaderboard?limit=` `/ips?min=`；列表（含 `/export`）：`GET /portal/invite/users` `/point-logs` `/admin-logs`；详情：`GET /portal/invite/users/{address或邀请码}`；管理：`POST /portal/invite/users/{address}/flag\|unflag\|adjust`（body `{reason, points}`）。权限码 `service/portal-invite/{view,export,flag,adjust}` |
-| 官网社交媒体（需配置 `databases.portal`） | 站内：`GET /portal/social/overview`（三平台漏斗 / 状态 / 积分 / 今日 / 复查健康度）`/trend?days=` `/quality`（X 粉丝数与账号年龄分布）`/ips?min=`；账号列表（含 `/export`）：`GET /portal/social/accounts`（不返回 token 列）；官方渠道：`GET /portal/social/channels`（直连 X / Telegram / Discord，10 分钟缓存，`?refresh=1` 需 manage）`/channels/history?days=`（每日快照）`POST /portal/social/channels/snapshot`。权限码 `service/portal-social/{view,export,manage}`。进程启动 30 秒后及之后每小时检查当天快照，缺则自动补 |
-| 官网用户管理（需配置 `databases.portal`） | 列表：`GET /portal/users`（基表 `u_profile` LEFT JOIN 邀请 / 星球 / 游戏账号，支持 `address` `name_like` `invite_code` `inviter` `planet_id` `social_like` `game_uid` `game_guild` `last_login_ip` 等过滤与排序，`/export` 导出）；概览：`GET /portal/users/stats`；详情：`GET /portal/users/{地址或邀请码或游戏UID}`（三库全量画像，分节容错）；管理：`POST /portal/users/{address}/invite-code`（预分配邀请码，已有则原样返回）。权限码 `service/portal-user/{view,export,manage}`。游戏字段只在官网库与游戏库同实例时直接 JOIN（`GameSchemaForPortal`），否则列表不含游戏列、详情仍分库查询 |
+| 官网邀请计划（需配置 `databases.portal`） | 口径：`GET /portal/invite/rules`（代理官网 `/invite/rules`）；报表：`GET /portal/invite/overview` `/trend?days=` `/leaderboard?limit=` `/ips?min=`；列表（含 `/export`）：`GET /portal/invite/users` `/point-logs` `/admin-logs`；详情：`GET /portal/invite/users/{address或邀请码}`；管理：`POST /portal/invite/users/{address}/flag\|unflag\|adjust`（body `{reason, points}`）。权限 `feature/portal-invite/view`（含导出）/ `edit`（flag / unflag / adjust） |
+| 官网社交媒体（需配置 `databases.portal`） | 站内：`GET /portal/social/overview`（三平台漏斗 / 状态 / 积分 / 今日 / 复查健康度）`/trend?days=` `/quality`（X 粉丝数与账号年龄分布）`/ips?min=`；账号列表（含 `/export`）：`GET /portal/social/accounts`（不返回 token 列）；官方渠道：`GET /portal/social/channels`（直连 X / Telegram / Discord，10 分钟缓存，`?refresh=1` 需 manage）`/channels/history?days=`（每日快照）`POST /portal/social/channels/snapshot`。权限 `feature/portal-social/view`（含导出）/ `edit`（refresh / snapshot）。进程启动 30 秒后及之后每小时检查当天快照，缺则自动补 |
+| 官网用户管理（需配置 `databases.portal`） | 列表：`GET /portal/users`（基表 `u_profile` LEFT JOIN 邀请 / 星球 / 游戏账号，支持 `address` `name_like` `invite_code` `inviter` `planet_id` `social_like` `game_uid` `game_guild` `last_login_ip` 等过滤与排序，`/export` 导出）；概览：`GET /portal/users/stats`；详情：`GET /portal/users/{地址或邀请码或游戏UID}`（三库全量画像，分节容错）；管理：`POST /portal/users/{address}/invite-code`（预分配邀请码，已有则原样返回）。权限 `feature/portal-user/view`（含导出）/ `edit`（预分配邀请码）。游戏字段只在官网库与游戏库同实例时直接 JOIN（`GameSchemaForPortal`），否则列表不含游戏列、详情仍分库查询 |
 
 列表过滤参数（只对代码里声明可过滤的列生效）：`col=v`（重复即 IN）、`col_like=`、`col_from=`/`col_to=`、`col_gt=`/`col_lt=`/`col_ne=`。
 导出为同步返回的 UTF-8（带 BOM）CSV，时间按 `timezone` 参数格式化，枚举列按枚举元数据翻译。
+
+## 权限模型
+
+以「功能」为单位，每个功能只有两档，角色勾选时一目了然：
+
+| 权限码 | 含义 |
+|---|---|
+| `feature/{key}/view` | 只读：列表 / 详情 / 报表、导出 |
+| `feature/{key}/edit` | 可更改：新建 / 修改 / 删除 / 审核 / 同步 / 启停 / 标记 / 调分 等一切写操作（前端勾可更改时自动含查看） |
+| `game/ranch/{region}` | 区域可见性（登录后可切换的区域） |
+
+功能 key（`internal/perm.Features`，也是 `GET /permission/features` 的返回）：`ranch-user` `ranch-guild`（纯查询）、`mail` `group-mail` `game-config`（签到 + 游戏服参数 / 代理）`guild-battle`、`analysis`（全部报表，纯查询）、`portal-user` `portal-social` `portal-invite`、`task`、`system-setting`（多语言）、`system-user`（用户与角色）。
+根通配 `{"code":"","wildcard":true}` 为超级管理员；`feature` 节点通配 = 全部功能可更改（含未来新增）；`game/ranch` 通配 = 全部区域。
+`/dashboard/summary` `/config/info` `/template/item` `/system/users`(GET) `/system/roles`(GET) `/meta/enum`(GET) `/locale/language/query|languages` 登录即可。
+旧的 `service/*` `table/*` `function/*` 码已废弃，角色迁移脚本见 `cow-startup/SQL2.0/migrations/2026-10-10_gms_feature_permissions.sql`（内置 `ADMIN` 超管、`ALL` 全功能可更改、`VIEWER` 全功能只读）。
+
+## 二步验证
+
+TOTP（RFC 6238，SHA1 / 6 位 / 30 秒，±1 步容差），与 Google / Microsoft Authenticator、1Password 等兼容，密钥存 `user.twoStepSecret`（空 = 未开启）。
+绑定流程：`/me/2fa/setup` 生成待确认密钥（仅内存，10 分钟）→ 用户扫码后用当前验证码调 `/me/2fa/enable` 才落库。开启后 `/login` 必须带 `otp`。
+关闭：本人 `/me/2fa/disable`（验证码或密码二选一）；丢失认证器由有「用户与角色 · 可更改」权限的管理员 `POST /system/users/{username}/reset_2fa`。
 
 ## 与 Java 版的行为差异
 

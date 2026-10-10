@@ -64,7 +64,7 @@ func (t *Tree) Merge(o *Tree) {
 	}
 }
 
-// Check 校验权限码,如 "service/gms-ranch/sync"。
+// Check 校验权限码,如 "feature/mail/edit"。
 func (t *Tree) Check(code string) bool {
 	if t == nil {
 		return false
@@ -106,12 +106,10 @@ func newNode(code, name string) *Node {
 	return &Node{Code: code, Name: name, Children: map[string]*Node{}}
 }
 
-// 顶层命名空间的显示名,与 Java 侧同步上来的权限数据一致。
+// 顶层命名空间的显示名。
 var namespaceNames = map[string]string{
-	"service":  "服务",
-	"function": "功能",
-	"table":    "数据表",
-	"game":     "游戏",
+	"feature": "功能",
+	"game":    "区域",
 }
 
 // Registry 启动时由各模块注册权限码与名称,构成权限定义树。
@@ -123,7 +121,7 @@ type Registry struct {
 // NewRegistry 创建空注册表。
 func NewRegistry() *Registry { return &Registry{root: newNode("", "")} }
 
-// Register 注册权限码(如 "service/gms-ranch/sync"),并为末段命名;
+// Register 注册权限码(如 "feature/mail/edit"),并为末段命名;
 // 中间段若尚未命名则用给定的 names 依次填充。返回原权限码,便于内联使用。
 func (r *Registry) Register(code, name string, intermediateNames ...string) string {
 	r.mu.Lock()

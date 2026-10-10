@@ -21,42 +21,50 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /me/change-password", httpx.H(auth.RequireLogin(s.handleChangePassword)))
 	mux.HandleFunc("POST /me/update-profile", httpx.H(auth.RequireLogin(s.handleUpdateProfile)))
 	mux.HandleFunc("POST /me/update-settings", httpx.H(auth.RequireLogin(s.handleUpdateSettings)))
+	// 二步验证(认证器)
+	mux.HandleFunc("POST /me/2fa/setup", httpx.H(auth.RequireLogin(s.handleTwoFactorSetup)))
+	mux.HandleFunc("POST /me/2fa/enable", httpx.H(auth.RequireLogin(s.handleTwoFactorEnable)))
+	mux.HandleFunc("POST /me/2fa/disable", httpx.H(auth.RequireLogin(s.handleTwoFactorDisable)))
 
 	// 权限定义树
-	mux.HandleFunc("GET /permission/tree", httpx.H(auth.Require(perm.PermissionTree, s.handlePermissionTree)))
+	// 权限定义(功能清单 + 定义树):角色编辑器用,有「用户与角色 · 查看」即可
+	mux.HandleFunc("GET /permission/tree", httpx.H(auth.Require(perm.SystemUserView, s.handlePermissionTree)))
+	mux.HandleFunc("GET /permission/features", httpx.H(auth.Require(perm.SystemUserView, s.handleFeatures)))
 
 	// 管理员(列表仅需登录:运营表格的"创建人/审核人"列要把 uid 翻译成用户名;不含密码与 token)
+	// 管理员列表登录即可读(运营表格里要把 createdBy / auditBy 的 uid 翻译成用户名);增删改走「用户与角色 · 可更改」
 	mux.HandleFunc("GET /system/users", httpx.H(auth.RequireLogin(s.handleListUsers)))
-	mux.HandleFunc("POST /system/users", httpx.H(auth.Require(perm.ManageUser, s.handleCreateUser)))
-	mux.HandleFunc("PUT /system/users/{uid}", httpx.H(auth.Require(perm.ManageUser, s.handleUpdateUser)))
-	mux.HandleFunc("DELETE /system/users/{uid}", httpx.H(auth.Require(perm.ManageUser, s.handleDeleteUser)))
-	mux.HandleFunc("POST /system/users/{username}/lock", httpx.H(auth.Require(perm.ManageUser, s.handleLockUser)))
-	mux.HandleFunc("POST /system/users/{username}/unlock", httpx.H(auth.Require(perm.ManageUser, s.handleUnlockUser)))
-	mux.HandleFunc("POST /system/users/{username}/update_role", httpx.H(auth.Require(perm.ManageUser, s.handleUpdateUserRoles)))
+	mux.HandleFunc("POST /system/users", httpx.H(auth.Require(perm.SystemUserEdit, s.handleCreateUser)))
+	mux.HandleFunc("PUT /system/users/{uid}", httpx.H(auth.Require(perm.SystemUserEdit, s.handleUpdateUser)))
+	mux.HandleFunc("DELETE /system/users/{uid}", httpx.H(auth.Require(perm.SystemUserEdit, s.handleDeleteUser)))
+	mux.HandleFunc("POST /system/users/{username}/lock", httpx.H(auth.Require(perm.SystemUserEdit, s.handleLockUser)))
+	mux.HandleFunc("POST /system/users/{username}/unlock", httpx.H(auth.Require(perm.SystemUserEdit, s.handleUnlockUser)))
+	mux.HandleFunc("POST /system/users/{username}/update_role", httpx.H(auth.Require(perm.SystemUserEdit, s.handleUpdateUserRoles)))
+	mux.HandleFunc("POST /system/users/{username}/reset_2fa", httpx.H(auth.Require(perm.SystemUserEdit, s.handleResetTwoFactor)))
 
 	// 角色(列表仅需登录:用户编辑器要用角色下拉)
 	mux.HandleFunc("GET /system/roles", httpx.H(auth.RequireLogin(s.handleListRoles)))
-	mux.HandleFunc("POST /system/roles", httpx.H(auth.Require(perm.ManageRole, s.handleCreateRole)))
-	mux.HandleFunc("PUT /system/roles/{role}", httpx.H(auth.Require(perm.ManageRole, s.handleUpdateRole)))
-	mux.HandleFunc("DELETE /system/roles/{role}", httpx.H(auth.Require(perm.ManageRole, s.handleDeleteRole)))
+	mux.HandleFunc("POST /system/roles", httpx.H(auth.Require(perm.SystemUserEdit, s.handleCreateRole)))
+	mux.HandleFunc("PUT /system/roles/{role}", httpx.H(auth.Require(perm.SystemUserEdit, s.handleUpdateRole)))
+	mux.HandleFunc("DELETE /system/roles/{role}", httpx.H(auth.Require(perm.SystemUserEdit, s.handleDeleteRole)))
 
 	// 多语言
 	mux.HandleFunc("GET /locale/language/languages", httpx.H(auth.RequireLogin(s.handleLanguages)))
 	mux.HandleFunc("GET /locale/language/query", httpx.H(auth.RequireLogin(s.handleLanguageQuery)))
-	mux.HandleFunc("GET /locale/language", httpx.H(auth.Require(perm.Language, s.handleLanguageList)))
-	mux.HandleFunc("POST /locale/language", httpx.H(auth.Require(perm.Language, s.handleLanguageCreate)))
-	mux.HandleFunc("PUT /locale/language/{langKey}", httpx.H(auth.Require(perm.Language, s.handleLanguageUpdate)))
-	mux.HandleFunc("DELETE /locale/language/{langKey}", httpx.H(auth.Require(perm.Language, s.handleLanguageDelete)))
+	mux.HandleFunc("GET /locale/language", httpx.H(auth.Require(perm.SystemSettingView, s.handleLanguageList)))
+	mux.HandleFunc("POST /locale/language", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleLanguageCreate)))
+	mux.HandleFunc("PUT /locale/language/{langKey}", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleLanguageUpdate)))
+	mux.HandleFunc("DELETE /locale/language/{langKey}", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleLanguageDelete)))
 
 	// 枚举元数据(读取仅需登录)
 	mux.HandleFunc("GET /meta/enum", httpx.H(auth.RequireLogin(s.handleEnumList)))
-	mux.HandleFunc("POST /meta/enum", httpx.H(auth.Require(perm.MetaEnum, s.handleEnumCreate)))
-	mux.HandleFunc("PUT /meta/enum/{code}", httpx.H(auth.Require(perm.MetaEnum, s.handleEnumUpdate)))
-	mux.HandleFunc("DELETE /meta/enum/{code}", httpx.H(auth.Require(perm.MetaEnum, s.handleEnumDelete)))
+	mux.HandleFunc("POST /meta/enum", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleEnumCreate)))
+	mux.HandleFunc("PUT /meta/enum/{code}", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleEnumUpdate)))
+	mux.HandleFunc("DELETE /meta/enum/{code}", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleEnumDelete)))
 	mux.HandleFunc("GET /meta/enum/{code}", httpx.H(auth.RequireLogin(s.handleEnumItems)))
-	mux.HandleFunc("POST /meta/enum/{code}", httpx.H(auth.Require(perm.MetaEnum, s.handleEnumItemCreate)))
-	mux.HandleFunc("PUT /meta/enum/{code}/{itemCode}", httpx.H(auth.Require(perm.MetaEnum, s.handleEnumItemUpdate)))
-	mux.HandleFunc("DELETE /meta/enum/{code}/{itemCode}", httpx.H(auth.Require(perm.MetaEnum, s.handleEnumItemDelete)))
+	mux.HandleFunc("POST /meta/enum/{code}", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleEnumItemCreate)))
+	mux.HandleFunc("PUT /meta/enum/{code}/{itemCode}", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleEnumItemUpdate)))
+	mux.HandleFunc("DELETE /meta/enum/{code}/{itemCode}", httpx.H(auth.Require(perm.SystemSettingEdit, s.handleEnumItemDelete)))
 }
 
 // ---------- 登录 ----------
@@ -65,6 +73,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Otp      string `json:"otp"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		return err
@@ -72,7 +81,7 @@ func (s *Service) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	if body.Username == "" || body.Password == "" {
 		return httpx.BadRequest("用户名或密码为空")
 	}
-	u, err := s.Login(r.Context(), body.Username, body.Password)
+	u, err := s.Login(r.Context(), body.Username, body.Password, body.Otp)
 	if err != nil {
 		return err
 	}
@@ -132,8 +141,47 @@ func (s *Service) handleUpdateSettings(w http.ResponseWriter, r *http.Request) e
 	return nil
 }
 
+func (s *Service) handleTwoFactorSetup(w http.ResponseWriter, r *http.Request) error {
+	secret, uri, err := s.TwoFactorSetup(r.Context(), auth.SessionFrom(r.Context()))
+	if err != nil {
+		return err
+	}
+	httpx.OK(w, map[string]string{"secret": secret, "uri": uri, "issuer": totpIssuer})
+	return nil
+}
+
+func (s *Service) handleTwoFactorEnable(w http.ResponseWriter, r *http.Request) error {
+	if err := s.TwoFactorEnable(r.Context(), auth.SessionFrom(r.Context()), httpx.FormValue(r, "code")); err != nil {
+		return err
+	}
+	httpx.NoContent(w)
+	return nil
+}
+
+func (s *Service) handleTwoFactorDisable(w http.ResponseWriter, r *http.Request) error {
+	if err := s.TwoFactorDisable(r.Context(), auth.SessionFrom(r.Context()), httpx.FormValue(r, "code"), httpx.FormValue(r, "password")); err != nil {
+		return err
+	}
+	httpx.NoContent(w)
+	return nil
+}
+
+func (s *Service) handleResetTwoFactor(w http.ResponseWriter, r *http.Request) error {
+	if err := s.ResetTwoFactor(r.Context(), r.PathValue("username")); err != nil {
+		return err
+	}
+	httpx.NoContent(w)
+	return nil
+}
+
 func (s *Service) handlePermissionTree(w http.ResponseWriter, _ *http.Request) error {
 	httpx.OK(w, perm.Registry.Tree())
+	return nil
+}
+
+// handleFeatures 功能清单(角色编辑器按「查看 / 可更改」矩阵展示)。
+func (s *Service) handleFeatures(w http.ResponseWriter, _ *http.Request) error {
+	httpx.OK(w, perm.Features)
 	return nil
 }
 
