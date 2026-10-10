@@ -21,6 +21,7 @@ import (
 	"cow-manager-backend/internal/modules/authcenter"
 	"cow-manager-backend/internal/modules/gms"
 	"cow-manager-backend/internal/modules/portalinvite"
+	"cow-manager-backend/internal/modules/portalsocial"
 	"cow-manager-backend/internal/modules/portaluser"
 	"cow-manager-backend/internal/modules/ranchdata"
 	"cow-manager-backend/internal/modules/task"
@@ -89,11 +90,14 @@ func main() {
 	analysisSvc.Register(mux)
 	scheduler.Register(mux)
 	// 官网模块(临时挂在 GMS;将来随 internal/modules/portal* + internal/portalapi 一起迁到官网管理后端)
+	var socialSvc *portalsocial.Service
 	if conns.Portal != nil {
 		portal := portalapi.New(cfg.Portal.APIBase)
 		portalinvite.NewService(conns.Portal, portal, loc, labeler).Register(mux)
 		portaluser.NewService(conns.Portal, conns.Game, conns.Log, cfg.GameSchemaForPortal(),
 			cfg.Portal.ImageHosting, cfg.Portal.SiteURL, portal, loc, labeler).Register(mux)
+		socialSvc = portalsocial.NewService(conns.Portal, cfg.Portal.Social, loc, labeler)
+		socialSvc.Register(mux)
 		if cfg.GameSchemaForPortal() == "" {
 			log.Printf("官网库与游戏库不在同一实例,官网用户列表不含游戏字段")
 		}
@@ -105,6 +109,10 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if socialSvc != nil {
+		socialSvc.Start(ctx) // 官方渠道每日快照巡检,随进程退出
+	}
 
 	if cfg.Task.Enabled {
 		if err := scheduler.Start(ctx); err != nil {

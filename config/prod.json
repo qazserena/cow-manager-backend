@@ -17,6 +17,16 @@
     "serverId": 1,
     "serverName": "ranch_server"
   },
+  "portal": {
+    "apiBase": "https://cow-portal-backend.cowgalaxy.com",
+    "imageHosting": "https://oss.cowgalaxy.com",
+    "siteUrl": "https://cowgalaxy.com",
+    "social": {
+      "x": { "target": "cowgalaxy2026", "bearerToken": "" },
+      "telegram": { "botToken": "8821191120:AAFQRGeF7ObLXkG-iEZyqjGb0yKWz2tHzwo", "chatId": "@cowgalaxy" },
+      "discord": { "botToken": "", "guildId": "" }
+    }
+  },
   "auth": { "tokenTTLHours": 24, "tokenRefreshHours": 12 },
   "task": { "enabled": true, "defaultCron": "0 40 1 * * *", "timeZone": "Asia/Shanghai" }
 }

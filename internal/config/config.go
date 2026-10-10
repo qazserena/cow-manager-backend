@@ -73,7 +73,29 @@ type Config struct {
 		ImageHosting string `json:"imageHosting"`
 		// SiteURL 官网站点前缀,用来拼邀请链接;缺省 https://cowgalaxy.com
 		SiteURL string `json:"siteUrl"`
+		// Social 官方社交渠道的直连凭证(运营看板拉官方账号 / 群的实时数据与每日快照)。
+		// 与 cow-portal-backend configs/system.toml [social.*] 保持一致;某平台留空则该平台只看站内绑定数据
+		Social PortalSocial `json:"social"`
 	} `json:"portal"`
+}
+
+// PortalSocial 三个运营渠道的直连配置。
+type PortalSocial struct {
+	X struct {
+		// Target 官方账号(不带 @),缺省 cowgalaxy2026
+		Target string `json:"target"`
+		// BearerToken X Developer Portal → 应用 → Keys and tokens → Bearer Token(app-only,读公开指标用)
+		BearerToken string `json:"bearerToken"`
+	} `json:"x"`
+	Telegram struct {
+		BotToken string `json:"botToken"`
+		// ChatID 官方群:@username 或 -100 开头数字 id;bot 需在群内
+		ChatID string `json:"chatId"`
+	} `json:"telegram"`
+	Discord struct {
+		BotToken string `json:"botToken"`
+		GuildID  string `json:"guildId"`
+	} `json:"discord"`
 }
 
 // GameSchemaForPortal 官网库与游戏库在同一 MySQL 实例时返回游戏库名(可在同一条 SQL 里跨库 JOIN),
@@ -130,6 +152,21 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("GMS_PORTAL_API_BASE"); v != "" {
 		c.Portal.APIBase = v
 	}
+	if v := os.Getenv("GMS_PORTAL_X_BEARER_TOKEN"); v != "" {
+		c.Portal.Social.X.BearerToken = v
+	}
+	if v := os.Getenv("GMS_PORTAL_TG_BOT_TOKEN"); v != "" {
+		c.Portal.Social.Telegram.BotToken = v
+	}
+	if v := os.Getenv("GMS_PORTAL_TG_CHAT_ID"); v != "" {
+		c.Portal.Social.Telegram.ChatID = v
+	}
+	if v := os.Getenv("GMS_PORTAL_DC_BOT_TOKEN"); v != "" {
+		c.Portal.Social.Discord.BotToken = v
+	}
+	if v := os.Getenv("GMS_PORTAL_DC_GUILD_ID"); v != "" {
+		c.Portal.Social.Discord.GuildID = v
+	}
 	dbs := []*DB{&c.Databases.Auth, &c.Databases.Gms, &c.Databases.Game, &c.Databases.Log, &c.Databases.Tpl, &c.Databases.Portal}
 	if v := os.Getenv("GMS_DB_PASSWORD"); v != "" {
 		for _, d := range dbs {
@@ -184,4 +221,8 @@ func (c *Config) applyDefaults() {
 	c.Portal.APIBase = strings.TrimRight(c.Portal.APIBase, "/")
 	c.Portal.ImageHosting = strings.TrimRight(c.Portal.ImageHosting, "/")
 	c.Portal.SiteURL = strings.TrimRight(c.Portal.SiteURL, "/")
+	if c.Portal.Social.X.Target == "" {
+		c.Portal.Social.X.Target = "cowgalaxy2026"
+	}
+	c.Portal.Social.X.Target = strings.TrimPrefix(c.Portal.Social.X.Target, "@")
 }

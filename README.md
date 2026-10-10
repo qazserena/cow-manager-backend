@@ -21,6 +21,9 @@ go test ./...
 官网模块相关：`databases.portal` 官网库 `cow-portal`（不配则 `/portal/*` 整组不挂载）；`portal.apiBase` 官网后端公开接口
 （拉邀请积分口径，缺省 `https://cow-portal-backend.cowgalaxy.com`）、`portal.imageHosting` 图床前缀（解析头像 / 牛牛图）、
 `portal.siteUrl` 官网站点（拼邀请链接）。官网库与游戏库在同一 MySQL 实例时，官网用户列表会直接跨库 JOIN 游戏账号。
+`portal.social` 为三个官方渠道的直连凭证，与官网 `configs/system.toml [social.*]` 保持一致：`telegram.botToken/chatId`（bot 需在群内）、
+`x.target/bearerToken`（X Developer Portal → Keys and tokens → Bearer Token，app-only；不配则 X 只看站内数据）、`discord.botToken/guildId`。
+也可用环境变量 `GMS_PORTAL_TG_BOT_TOKEN` `GMS_PORTAL_TG_CHAT_ID` `GMS_PORTAL_X_BEARER_TOKEN` `GMS_PORTAL_DC_BOT_TOKEN` `GMS_PORTAL_DC_GUILD_ID` 覆盖。
 
 容器：`docker compose up -d --build`（`Dockerfile` 多阶段构建，镜像内含 `config/`）。
 线上只保留 `gms-ranch.cowgalaxy.com` 一个域名反代到本服务（Java 时代的 `gms-auth` / `gms-taskrunner` 已下线）；
@@ -46,6 +49,9 @@ internal/modules/portalinvite 官网公测邀请计划的管理与报表(读 cow
 internal/modules/portaluser  官网用户管理:以钱包地址为主键,汇总官网库 / 游戏库 / 日志库里的全部画像
                              (资料、邀请码与积分、社交绑定、公测领取、牛牛、星球、市场、游戏账号与任务、登录 IP),
                              可为用户预分配邀请码;与 portalinvite 同属官网业务,一起迁移
+internal/modules/portalsocial 官网社交媒体运营看板:X / Telegram / Discord 的站内社交任务漏斗 / 留存 / 取关 /
+                             反作弊 / 积分 / 账号质量 / 同 IP / 复查健康度,以及直连平台 API 的官方渠道规模
+                             (粉丝 / 群成员)与每日快照(u_social_channel_stat);凭证在 config portal.social
 internal/portalapi           官网后端公开接口的小客户端:拉 /invite/rules(等级门槛 / 分值)并缓存 10 分钟,
                              官网改口径后 GMS 报表自动跟上;迁到官网后可删
 ```
@@ -71,6 +77,7 @@ internal/portalapi           官网后端公开接口的小客户端:拉 /invite
 | 统计 | `GET /analysis/bullring-count` `/bullring-rewards` `/user` `/retention`（均有 `/export`） |
 | 任务 | `GET /task/list` `GET /task/log?className=` `POST /task/enableOrDisableTask` `/task/updateCronTrigger` `/task/manualSchedule` |
 | 官网邀请计划（需配置 `databases.portal`） | 口径：`GET /portal/invite/rules`（代理官网 `/invite/rules`）；报表：`GET /portal/invite/overview` `/trend?days=` `/leaderboard?limit=` `/ips?min=`；列表（含 `/export`）：`GET /portal/invite/users` `/point-logs` `/admin-logs`；详情：`GET /portal/invite/users/{address或邀请码}`；管理：`POST /portal/invite/users/{address}/flag\|unflag\|adjust`（body `{reason, points}`）。权限码 `service/portal-invite/{view,export,flag,adjust}` |
+| 官网社交媒体（需配置 `databases.portal`） | 站内：`GET /portal/social/overview`（三平台漏斗 / 状态 / 积分 / 今日 / 复查健康度）`/trend?days=` `/quality`（X 粉丝数与账号年龄分布）`/ips?min=`；账号列表（含 `/export`）：`GET /portal/social/accounts`（不返回 token 列）；官方渠道：`GET /portal/social/channels`（直连 X / Telegram / Discord，10 分钟缓存，`?refresh=1` 需 manage）`/channels/history?days=`（每日快照）`POST /portal/social/channels/snapshot`。权限码 `service/portal-social/{view,export,manage}`。进程启动 30 秒后及之后每小时检查当天快照，缺则自动补 |
 | 官网用户管理（需配置 `databases.portal`） | 列表：`GET /portal/users`（基表 `u_profile` LEFT JOIN 邀请 / 星球 / 游戏账号，支持 `address` `name_like` `invite_code` `inviter` `planet_id` `social_like` `game_uid` `game_guild` `last_login_ip` 等过滤与排序，`/export` 导出）；概览：`GET /portal/users/stats`；详情：`GET /portal/users/{地址或邀请码或游戏UID}`（三库全量画像，分节容错）；管理：`POST /portal/users/{address}/invite-code`（预分配邀请码，已有则原样返回）。权限码 `service/portal-user/{view,export,manage}`。游戏字段只在官网库与游戏库同实例时直接 JOIN（`GameSchemaForPortal`），否则列表不含游戏列、详情仍分库查询 |
 
 列表过滤参数（只对代码里声明可过滤的列生效）：`col=v`（重复即 IN）、`col_like=`、`col_from=`/`col_to=`、`col_gt=`/`col_lt=`/`col_ne=`。
