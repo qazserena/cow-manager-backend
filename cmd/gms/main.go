@@ -19,6 +19,7 @@ import (
 	"cow-manager-backend/internal/httpx"
 	"cow-manager-backend/internal/modules/analysis"
 	"cow-manager-backend/internal/modules/authcenter"
+	"cow-manager-backend/internal/modules/dashboard"
 	"cow-manager-backend/internal/modules/gms"
 	"cow-manager-backend/internal/modules/portalinvite"
 	"cow-manager-backend/internal/modules/portalsocial"
@@ -86,6 +87,8 @@ func main() {
 	})
 	authSvc.Register(mux)
 	gmsSvc.Register(mux)
+	// 概览页核心指标(官网库可选)
+	dashboard.NewService(conns.Game, conns.Log, conns.Gms, conns.Portal, loc).Register(mux)
 	dataSvc.Register(mux)
 	analysisSvc.Register(mux)
 	scheduler.Register(mux)

@@ -42,6 +42,7 @@ internal/modules/authcenter  登录、个人中心、管理员、角色、多语
 internal/modules/gms         邮件/群邮件/签到/公会战配置的增删改、审核、激活、同步;游戏服签名与代理
 internal/modules/ranchdata   玩家、公会、公会字典、公会战记录、斗牛场日志(只读 + 导出)
 internal/modules/analysis    da_ranch_* 统计表(只读 + 导出)
+internal/modules/dashboard   概览页核心指标:游戏规模与活跃 / 官网资产与增长 / 近 30 天趋势 / 待办与任务健康,四库汇总,60 秒缓存
 internal/modules/task        cron 调度、执行日志、手动补跑、三个牧场统计任务
 internal/modules/portalinvite 官网公测邀请计划的管理与报表(读 cow-portal 库 u_invite_*);
                              临时挂在 GMS,只依赖 httpx/auth/perm/query,库连接 / 权限码 / 路由自成一组,
@@ -66,6 +67,7 @@ internal/portalapi           官网后端公开接口的小客户端:拉 /invite
 | 登录 | `POST /login` `POST /login-with-token` `POST /logout` |
 | 个人中心 | `POST /me/change-password` `/me/update-profile` `/me/update-settings`（form） |
 | 权限 | `GET /permission/tree` |
+| 概览 | `GET /dashboard/summary`（`?refresh=1` 跳过 60 秒缓存；登录即可）|
 | 管理员 | `GET/POST /system/users` `PUT/DELETE /system/users/{uid}` `POST /system/users/{username}/lock\|unlock\|update_role` |
 | 角色 | `GET/POST /system/roles` `PUT/DELETE /system/roles/{role}` |
 | 多语言 | `GET /locale/language` `/languages` `/query?lang=` `POST /locale/language` `PUT/DELETE /locale/language/{langKey}` |

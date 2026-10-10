@@ -563,12 +563,16 @@ func (s *Service) loadBeta(ctx context.Context, address string) (*BetaSummary, e
 	return b, err
 }
 
+// loadCattle 牛牛列表。模板表 s_cattle 的匹配规则与官网 cache.CattleTemplateKey 一致:
+// class 1(创世牛 Bovine Hero)按 性别 + 性别内序号;class 2(普通牛)按 性别 + 是否成年。
+// 注意两张表的 is_adult 都是 varchar:u_cattle 存 '1'/'0',s_cattle 存 't'/'f'。
 func (s *Service) loadCattle(ctx context.Context, address string) (*CattleSummary, error) {
 	c := &CattleSummary{List: []Cattle{}}
 	if err := s.portal.SelectContext(ctx, &c.List, `SELECT u.id, u.class, u.is_adult, u.gender, u.gender_seq, u.star, u.life, u.growth, u.energy,
 		u.attack, u.stamina, u.defense, u.milk, u.milk_rate, u.dead_at, COALESCE(u.parents, '') AS parents,
 		COALESCE(t.name_cn, '') AS name, COALESCE(t.image, '') AS image
-		FROM u_cattle u LEFT JOIN s_cattle t ON t.class = u.class AND t.gender = u.gender AND t.gsq = u.gender_seq AND t.is_adult = u.is_adult
+		FROM u_cattle u LEFT JOIN s_cattle t ON t.class = u.class AND t.gender = u.gender
+		  AND ((u.class = 1 AND t.gsq = u.gender_seq) OR (u.class <> 1 AND t.is_adult = IF(u.is_adult IN ('1','t','true'), 't', 'f')))
 		WHERE u.owner = ? ORDER BY u.id DESC LIMIT 300`, address); err != nil {
 		return nil, err
 	}
