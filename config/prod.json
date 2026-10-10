@@ -22,7 +22,7 @@
     "imageHosting": "https://oss.cowgalaxy.com",
     "siteUrl": "https://cowgalaxy.com",
     "social": {
-      "x": { "target": "cowgalaxy2026", "bearerToken": "" },
+      "x": { "target": "cowgalaxy2026", "bearerToken": "AAAAAAAAAAAAAAAAAAAAAAJ6%2FwEAAAAA6veSY%2FshF4uPUk%2FT8TJCyN%2FI1ug%3DNl6tGAFYwjQo70JTh21U2MJsNFgZltePRWqZrwh2Qpec80BETW" },
       "telegram": { "botToken": "8821191120:AAFQRGeF7ObLXkG-iEZyqjGb0yKWz2tHzwo", "chatId": "@cowgalaxy" },
       "discord": { "botToken": "", "guildId": "" }
     }
