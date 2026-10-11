@@ -91,6 +91,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /portal/social/trend", httpx.H(auth.Require(PermView, s.trend)))
 	mux.HandleFunc("GET /portal/social/quality", httpx.H(auth.Require(PermView, s.quality)))
 	mux.HandleFunc("GET /portal/social/ips", httpx.H(auth.Require(PermView, s.ipReport)))
+	mux.HandleFunc("GET /portal/social/rates", httpx.H(auth.Require(PermView, s.rates)))
+	mux.HandleFunc("GET /portal/social/revocations", httpx.H(auth.Require(PermView, s.revocations)))
 	mux.HandleFunc("GET /portal/social/channels", httpx.H(auth.Require(PermView, s.channels)))
 	mux.HandleFunc("GET /portal/social/channels/history", httpx.H(auth.Require(PermView, s.channelHistory)))
 	mux.HandleFunc("POST /portal/social/channels/snapshot", httpx.H(auth.Require(PermManage, s.snapshotNow)))
