@@ -373,6 +373,10 @@ type Quality struct {
 	IPLimited     int64    `json:"ipLimited"`  // flag=ip_limited
 	MedianFollow  int64    `json:"medianFollowers"`
 	MedianAgeDays int64    `json:"medianAgeDays"`
+	// LowReasons 低质量按原因分桶（官网写在 meta.lowQuality）：account_age 注册太新 / followers 粉丝少且空壳
+	LowReasons map[string]int64 `json:"lowReasons"`
+	// EmptyShell 默认头像或从未发帖的账号数（X 才有，不论是否被标记）
+	EmptyShell int64 `json:"emptyShell"`
 }
 
 // edge 分桶上界(含)。
@@ -414,7 +418,7 @@ func (s *Service) quality(w http.ResponseWriter, r *http.Request) error {
 	now := time.Now()
 	out := make([]*Quality, 0, len(Platforms))
 	for _, p := range Platforms {
-		q := &Quality{Platform: p, Followers: []Bucket{}, AccountAge: []Bucket{}}
+		q := &Quality{Platform: p, Followers: []Bucket{}, AccountAge: []Bucket{}, LowReasons: map[string]int64{}}
 		fb := map[string]int64{}
 		ab := map[string]int64{}
 		var fs, ages []int64
@@ -432,13 +436,22 @@ func (s *Service) quality(w http.ResponseWriter, r *http.Request) error {
 				continue
 			}
 			var m struct {
-				CreatedAt int64 `json:"createdAt"`
-				Followers int64 `json:"followers"`
+				CreatedAt     int64  `json:"createdAt"`
+				Followers     int64  `json:"followers"`
+				Tweets        int64  `json:"tweets"`
+				DefaultAvatar bool   `json:"defaultAvatar"`
+				LowQuality    string `json:"lowQuality"`
 			}
 			if json.Unmarshal([]byte(x.Meta), &m) != nil {
 				continue
 			}
 			q.WithMeta++
+			if m.LowQuality != "" {
+				q.LowReasons[m.LowQuality]++
+			}
+			if p == "x" && (m.DefaultAvatar || m.Tweets == 0) {
+				q.EmptyShell++
+			}
 			if p == "x" {
 				fb[bucketOf(followerEdges, m.Followers)]++
 				fs = append(fs, m.Followers)

@@ -1,6 +1,6 @@
 // Package auth 提供密码哈希、令牌、权限树与会话鉴权中间件。
 //
-// 密码与令牌格式与原 Java auth-center 逐字节兼容,库里的既有账号与 token 无需迁移。
+// 密码哈希与令牌格式即 auth_center 库里存的格式,改动会让既有账号 / token 失效。
 package auth
 
 import (

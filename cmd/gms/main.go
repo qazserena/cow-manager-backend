@@ -1,5 +1,5 @@
-// gms 是统一游戏管理平台(GMS)后端:原 auth-center / gms-ranch / task-runner
-// 三个 Java 服务合并为一个 Go 进程,同一端口提供全部接口。
+// gms 是统一游戏管理平台(GMS)后端:账号权限、运营配置、数据分析、定时任务与官网运营
+// 全部在一个进程、同一端口提供。
 package main
 
 import (

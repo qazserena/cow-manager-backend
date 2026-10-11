@@ -18,7 +18,7 @@ func Chain(h http.Handler, mws ...Middleware) http.Handler {
 	return h
 }
 
-// CORS 允许任意来源的跨域请求(与原各 Java 服务 "*" 放行一致),并直接应答预检。
+// CORS 允许任意来源的跨域请求,并直接应答预检。
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")

@@ -11,7 +11,7 @@ import (
 	"cow-manager-backend/internal/perm"
 )
 
-// Register 挂载路由。路径与响应形态与原 task-runner 保持一致,前端无需改动。
+// Register 挂载路由。
 // 查看列表 / 日志 → feature/task/view;启停 / 改 cron / 补跑 → feature/task/edit。
 func (s *Scheduler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /task/list", httpx.H(auth.Require(perm.TaskView, func(w http.ResponseWriter, r *http.Request) error {

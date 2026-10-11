@@ -146,7 +146,7 @@ func (s *Service) Login(ctx context.Context, username, password, otp string) (*U
 			return nil, httpx.NewError(httpx.CodeOtpInvalid, "验证码错误或已过期")
 		}
 	}
-	// 与 Java 一致:token 为空或剩余有效期不足一半时才换新 token
+	// token 为空或剩余有效期不足一半时才换新 token
 	if u.Token == "" || u.TokenExpireTick-now < s.refreshTTL.Milliseconds() {
 		u.Token = auth.GenerateToken(u.UID)
 		u.TokenExpireTick = now + s.tokenTTL.Milliseconds()
@@ -200,7 +200,7 @@ func (s *Service) LoadSession(ctx context.Context, token string) (*auth.Session,
 	}, nil
 }
 
-// Logout 清掉库里的 token,使其立即失效(Java 版只清内存缓存)。
+// Logout 清掉库里的 token,使其立即失效。
 func (s *Service) Logout(ctx context.Context, sess *auth.Session) error {
 	s.sessions.InvalidateToken(sess.Token)
 	return s.repo.UpdateToken(ctx, sess.UID, "", 0)

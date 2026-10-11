@@ -50,7 +50,7 @@ type Scheduler struct {
 	order   []string
 }
 
-// NewScheduler 创建调度器;cron 表达式为 6 段(秒 分 时 日 月 周),与 Spring 一致。
+// NewScheduler 创建调度器;cron 表达式为 6 段(秒 分 时 日 月 周)。
 func NewScheduler(gmsDB *sqlx.DB, loc *time.Location, defaultCron string) *Scheduler {
 	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 	return &Scheduler{

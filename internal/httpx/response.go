@@ -1,6 +1,6 @@
 // Package httpx 是 HTTP 层的小工具:统一错误码、JSON 响应、参数解析与中间件。
 //
-// 错误响应与原 Java 版保持一致:非 2xx + {"code":int,"message":string};
+// 错误响应:非 2xx + {"code":int,"message":string};
 // 101(令牌过期)/100(权限不足)用 403,参数类/业务类错误用 400,其余 500。
 // 成功响应为裸 JSON(不包 Result 壳),前端据此直接取数据。
 package httpx
@@ -12,7 +12,7 @@ import (
 	"net/http"
 )
 
-// 错误码,与 Java common ErrorCode / AuthErrorCode 对齐。
+// 错误码(前端按 code 判断令牌过期 / 权限不足)。
 const (
 	CodeOK               = 0
 	CodeBadArgument      = 9
@@ -117,7 +117,7 @@ func H(f HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Page 分页响应,字段名沿用 Spring Page 的 content / totalElements。
+// Page 分页响应:content / totalElements,前端表格按这两个字段名取数。
 type Page struct {
 	Content       any   `json:"content"`
 	TotalElements int64 `json:"totalElements"`

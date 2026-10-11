@@ -1,7 +1,7 @@
 // Package task 实现定时统计任务:调度(cron)、执行日志、手动补跑,
 // 以及三个牧场离线统计任务(斗牛场、留存、用户)。
 //
-// 任务名沿用原 Java 类全名,task_status / task_log 既有数据无需迁移。
+// 任务名是 task_status / task_log 的主键,见 tasks_ranch.go 的 Name* 常量,改名会断掉历史数据。
 package task
 
 import (

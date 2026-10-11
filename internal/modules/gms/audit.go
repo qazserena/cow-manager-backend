@@ -9,7 +9,7 @@ import (
 	"cow-manager-backend/internal/httpx"
 )
 
-// 审核状态,与 Java AuditStatus / 前端 AuditWidget 一致。
+// 审核状态,与前端 AuditWidget 一致。
 const (
 	AuditWait     = 0
 	AuditApproval = 1
@@ -68,7 +68,7 @@ func setActive(ctx context.Context, db *sqlx.DB, table string, id int64, active 
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		// 状态未变也算成功(与 Java no-op 一致),但记录必须存在
+		// 状态未变也算成功,但记录必须存在
 		var cnt int
 		if err := db.GetContext(ctx, &cnt, "SELECT COUNT(*) FROM `"+table+"` WHERE id = ? AND deletedTime = 0", id); err != nil {
 			return err

@@ -8,7 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// 任务名沿用 Java 类全名,保证 task_status / task_log 历史数据连续。
+// 任务名即 task_status / task_log 里的主键,历史数据都挂在这几个名字下,不要改。
 const (
 	NameBullring  = "com.brilljoy.olap.task.ranch.bullring.TaskBullringRanch"
 	NameRetention = "com.brilljoy.olap.task.ranch.retention.TaskRetentionRanch"

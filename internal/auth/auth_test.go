@@ -13,7 +13,7 @@ func TestTokenRoundTrip(t *testing.T) {
 			t.Fatalf("DecodeUID(%q) = %d, %v; want %d", tok, got, err, uid)
 		}
 	}
-	// 与 Java TokenFactory 的编码一致:uid=1 → base64 "MQ==" → hex "4d513d3d"
+	// uid=1 → base64 "MQ==" → hex "4d513d3d"
 	if tok := GenerateToken(1); tok[:9] != "4d513d3d-" {
 		t.Fatalf("token 前缀 = %q, want 4d513d3d-", tok[:9])
 	}

@@ -9,8 +9,8 @@ import (
 
 // Tree 角色权限树(role.permissionTree 的 JSON 形态)。
 //
-// 校验规则与 Java PermissionTree.check 一致:按 "/" 逐段下钻,途中任一节点
-// wildcard=true 即放行;整条路径都能匹配到节点也放行(非严格模式)。
+// 校验规则:按 "/" 逐段下钻,途中任一节点 wildcard=true 即放行;
+// 整条路径都能匹配到节点也放行(非严格模式)。
 type Tree struct {
 	Code     string           `json:"code"`
 	Wildcard bool             `json:"wildcard"`

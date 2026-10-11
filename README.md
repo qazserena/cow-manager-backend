@@ -1,11 +1,10 @@
-# 游戏管理平台（GMS）— Go 后端
+# 游戏管理平台（GMS）— 后端
 
-原 Java 版（`../cow-manager-backend-java`，auth-center / gms-ranch / task-runner 三个 Spring Boot 服务，已废弃、仅供参考）的 Go 重写版，
-**一个进程、一个端口**提供全部接口。不再实现通用 Table 框架（schema + 条件 DSL），每个资源都是普通 REST；
-前端 `cow-manager-frontend` 已同步改为本地声明列、按普通 query 参数过滤。
+账号权限、运营配置、数据分析、定时任务与官网运营，**一个进程、一个端口**提供全部接口。
+没有通用 Table 框架，每个资源都是普通 REST；前端 `cow-manager-frontend` 本地声明列、按普通 query 参数过滤。
 
 - 语言 / 依赖：Go 1.25，仅 `go-sql-driver/mysql`、`sqlx`、`robfig/cron`
-- 数据库：直连 `auth_center`、`gms-ranch`、`ranch_game`、`ranch_log`、`ranch_tpl` 五个库，**表结构不变**，既有账号、token、角色、任务记录全部沿用
+- 数据库：直连 `auth_center`、`gms-ranch`、`ranch_game`、`ranch_log`、`ranch_tpl` 五个库（官网模块另连 `cow-portal`）
 
 ## 运行
 
@@ -26,7 +25,7 @@ go test ./...
 也可用环境变量 `GMS_PORTAL_TG_BOT_TOKEN` `GMS_PORTAL_TG_CHAT_ID` `GMS_PORTAL_X_BEARER_TOKEN` `GMS_PORTAL_DC_BOT_TOKEN` `GMS_PORTAL_DC_GUILD_ID` 覆盖。
 
 容器：`docker compose up -d --build`（`Dockerfile` 多阶段构建，镜像内含 `config/`）。
-线上只保留 `gms-ranch.cowgalaxy.com` 一个域名反代到本服务（Java 时代的 `gms-auth` / `gms-taskrunner` 已下线）；
+线上由 `gms-ranch.cowgalaxy.com` 一个域名反代到本服务；
 前端默认用 `https://gms-ranch.cowgalaxy.com`，也可通过 `VITE_APP_API_BASE` 指定。
 
 ## 目录
@@ -114,10 +113,9 @@ TOTP（RFC 6238，SHA1 / 6 位 / 30 秒，±1 步容差），与 Google / Micros
 绑定流程：`/me/2fa/setup` 生成待确认密钥（仅内存，10 分钟）→ 用户扫码后用当前验证码调 `/me/2fa/enable` 才落库。开启后 `/login` 必须带 `otp`。
 关闭：本人 `/me/2fa/disable` 只认当前验证码（密码不能替代，否则 token 被盗 + 密码泄露即可拆掉第二道锁）；丢失认证器由权限覆盖该账号的管理员 `POST /system/users/{username}/reset_2fa`。
 
-## 与 Java 版的行为差异
+## 行为约定
 
 - 删除运营配置为软删除（`deletedTime`），列表与同步均不再包含；已激活的记录不允许再修改（游戏服只在首次同步时插入，改了也不会生效）。
-- 签到奖励等附件的代币数量仍由游戏服同步时 ×10^18，这里只做 JSON 合法性校验。
-- 登出会清掉库里的 token；角色或用户权限改动后会话缓存即时失效，无需等 24 小时。
-- 定时任务的"日"按 `task.timeZone`（默认 Asia/Shanghai）切分；任务名沿用 Java 类全名，历史 `task_status` / `task_log` 直接可用。
-- 原 `/table/*`、`/config/ranchconfig`、`/token/query-session`、`/permission/sync`、`/meta/enum/sync` 等服务间接口不再提供。
+- 签到奖励等附件的代币数量由游戏服同步时 ×10^18，这里只做 JSON 合法性校验。
+- 登出会清掉库里的 token；角色或用户权限改动后会话缓存即时失效。
+- 定时任务的"日"按 `task.timeZone`（默认 Asia/Shanghai）切分；任务名是 `task_status` / `task_log` 的主键（见 `internal/modules/task/tasks_ranch.go`），不要改。

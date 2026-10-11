@@ -272,7 +272,7 @@ func (c *Column) convert(v any) any {
 	case Bool:
 		return s == "1" || strings.EqualFold(s, "true")
 	default:
-		// JSON 列也按原文字符串返回,与原 Java 版(实体字段为 String)一致,前端自行解析
+		// JSON 列按原文字符串返回,前端自行解析
 		return s
 	}
 }

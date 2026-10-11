@@ -20,7 +20,7 @@ import (
 
 // GameServer 游戏服 login 进程 /admin 接口客户端。
 //
-// 签名算法与原 Java GameServerSigner 逐字节一致,游戏服侧见
+// 签名算法必须与游戏服侧校验一致,见
 // cow-game-server/services/login/internal/login/handlers.go VerifyGmsSignature:
 //
 //	md5hex( path + Σ(按 key 排序的 query: key + values 直接拼接) + ts(秒) + random + apiKey )
