@@ -3,8 +3,10 @@ package portalsocial
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -51,12 +53,32 @@ type XCredits struct {
 	Error string `json:"error,omitempty"`
 }
 
-var httpClient = &http.Client{Timeout: 8 * time.Second}
+// httpClient 超时 15 秒:后台跑在香港,到 api.x.com 的首字节偶尔要 5~10 秒,
+// 8 秒会间歇性撞上 "Client.Timeout exceeded while awaiting headers"。
+var httpClient = &http.Client{Timeout: 15 * time.Second}
 
 // xAPIBase 便于单测用 httptest 替换。
 var xAPIBase = "https://api.x.com"
 
+// getJSON 对超时 / 连接类错误重试一次;HTTP 4xx/5xx 不重试(那是业务或鉴权问题)。
 func getJSON(ctx context.Context, rawURL string, headers map[string]string, out any) error {
+	err := getJSONOnce(ctx, rawURL, headers, out)
+	if err == nil || ctx.Err() != nil || !isTransient(err) {
+		return err
+	}
+	return getJSONOnce(ctx, rawURL, headers, out)
+}
+
+func isTransient(err error) bool {
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "connection reset") || strings.Contains(msg, "EOF") || strings.Contains(msg, "TLS handshake timeout")
+}
+
+func getJSONOnce(ctx context.Context, rawURL string, headers map[string]string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return err

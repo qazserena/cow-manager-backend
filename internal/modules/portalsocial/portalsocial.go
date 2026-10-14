@@ -39,6 +39,9 @@ var Platforms = []string{"x", "telegram", "discord"}
 
 const liveTTL = 10 * time.Minute
 
+// liveRetryAfter 拉取失败后多久允许重试(见 liveCached)。
+const liveRetryAfter = time.Minute
+
 // Service 社交媒体运营服务。
 type Service struct {
 	db      *sqlx.DB // cow-portal
@@ -539,10 +542,17 @@ func (s *Service) channels(w http.ResponseWriter, r *http.Request) error {
 			refresh = false
 		}
 	}
-	out := make([]*ChannelLive, 0, len(Platforms))
-	for _, p := range Platforms {
-		out = append(out, s.liveCached(r.Context(), p, refresh))
+	// 三个平台并行拉:X 偶发要重试一次,串行最坏 3×30s 会撞上前端 60s 超时
+	out := make([]*ChannelLive, len(Platforms))
+	var wg sync.WaitGroup
+	for i, p := range Platforms {
+		wg.Add(1)
+		go func(i int, p string) {
+			defer wg.Done()
+			out[i] = s.liveCached(r.Context(), p, refresh)
+		}(i, p)
 	}
+	wg.Wait()
 	httpx.OK(w, out)
 	return nil
 }
@@ -567,6 +577,12 @@ func (s *Service) liveCached(ctx context.Context, platform string, refresh bool)
 	}
 	s.live[platform] = c
 	s.liveAt[platform] = time.Now()
+	// 这次没拿到新数据(含"沿用旧数据"的情况)时,把缓存视为 1 分钟后过期,
+	// 让下一次打开页面就能重试,而不是把失败结果也缓存满 10 分钟。
+	// 冷启动第一次超时就会满屏红,就是这个原因。
+	if c.Error != "" {
+		s.liveAt[platform] = time.Now().Add(-(liveTTL - liveRetryAfter))
+	}
 	s.liveMu.Unlock()
 	return c
 }
