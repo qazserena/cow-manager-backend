@@ -34,9 +34,27 @@ type ChannelLive struct {
 	Listed int64             `json:"listed"`
 	Extra  map[string]any    `json:"extra,omitempty"`
 	Labels map[string]string `json:"labels"` // members / secondary / posts 的显示名
+	// Credits X 开发者平台(pay-per-use)余额;仅 X 有,其它平台为 nil
+	Credits *XCredits `json:"credits,omitempty"`
+}
+
+// XCredits X 开发者平台余额(USD),来自 GET /2/usage/credits。
+// Total = max(0, Prepaid + Free);Prepaid 透支时可为负。余额为 0 后 X API 会拒绝请求,
+// 社媒任务的关注校验、官方渠道数据都会随之失败,所以放到后台首页盯着。
+type XCredits struct {
+	Total   float64 `json:"total"`
+	Prepaid float64 `json:"prepaid"`
+	Free    float64 `json:"free"`
+	// FreeExpiresAt 最早一笔赠送额度的到期时间(RFC3339);赠送额度不会过期或未知时为空
+	FreeExpiresAt string `json:"freeExpiresAt,omitempty"`
+	// Error 余额接口单独失败时记录原因;不影响粉丝等主指标
+	Error string `json:"error,omitempty"`
 }
 
 var httpClient = &http.Client{Timeout: 8 * time.Second}
+
+// xAPIBase 便于单测用 httptest 替换。
+var xAPIBase = "https://api.x.com"
 
 func getJSON(ctx context.Context, rawURL string, headers map[string]string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
@@ -134,7 +152,7 @@ func (s *Service) fetchX(ctx context.Context, out *ChannelLive) error {
 			Detail string `json:"detail"`
 		} `json:"errors"`
 	}
-	u := "https://api.x.com/2/users/by/username/" + url.PathEscape(c.Target) + "?user.fields=public_metrics,created_at,verified"
+	u := xAPIBase + "/2/users/by/username/" + url.PathEscape(c.Target) + "?user.fields=public_metrics,created_at,verified"
 	if err := getJSON(ctx, u, map[string]string{"Authorization": "Bearer " + c.BearerToken}, &resp); err != nil {
 		return err
 	}
@@ -149,7 +167,50 @@ func (s *Service) fetchX(ctx context.Context, out *ChannelLive) error {
 	out.Posts = resp.Data.PublicMetrics.Tweets
 	out.Listed = resp.Data.PublicMetrics.Listed
 	out.Extra = map[string]any{"createdAt": resp.Data.CreatedAt, "verified": resp.Data.Verified, "id": resp.Data.ID}
+	// 余额单独拉,失败只记在 Credits.Error 里,不让主指标跟着挂
+	out.Credits = s.fetchXCredits(ctx)
 	return nil
+}
+
+// fetchXCredits GET /2/usage/credits,用同一个 Bearer Token。
+func (s *Service) fetchXCredits(ctx context.Context) *XCredits {
+	c := s.social.X
+	var resp struct {
+		Data struct {
+			TotalBalance   float64 `json:"total_balance"`
+			PrepaidBalance float64 `json:"prepaid_balance"`
+			FreeBalance    float64 `json:"free_balance"`
+			FreeGrants     []struct {
+				Amount    float64 `json:"amount"`
+				ExpiresAt string  `json:"expires_at"`
+			} `json:"free_grants"`
+		} `json:"data"`
+		Errors []struct {
+			Title  string `json:"title"`
+			Detail string `json:"detail"`
+		} `json:"errors"`
+	}
+	cr := &XCredits{}
+	u := xAPIBase + "/2/usage/credits"
+	if err := getJSON(ctx, u, map[string]string{"Authorization": "Bearer " + c.BearerToken}, &resp); err != nil {
+		cr.Error = err.Error()
+		return cr
+	}
+	if len(resp.Errors) > 0 {
+		cr.Error = fmt.Sprintf("%s: %s", resp.Errors[0].Title, resp.Errors[0].Detail)
+		return cr
+	}
+	cr.Total = resp.Data.TotalBalance
+	cr.Prepaid = resp.Data.PrepaidBalance
+	cr.Free = resp.Data.FreeBalance
+	// X 返回的 free_grants 按到期时间升序,取第一笔有到期时间的
+	for _, g := range resp.Data.FreeGrants {
+		if g.ExpiresAt != "" {
+			cr.FreeExpiresAt = g.ExpiresAt
+			break
+		}
+	}
+	return cr
 }
 
 // ---------- Telegram ----------
