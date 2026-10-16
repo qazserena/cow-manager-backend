@@ -261,6 +261,10 @@ func (s *Scheduler) List(ctx context.Context) ([]VO, error) {
 			Version: e.task.Version(), Description: e.task.Description(), ClassName: name,
 			ExecutedCount: st.ExecutedCount, CronTrigger: st.CronTrigger, Enable: st.Enable,
 		}
+		// 累计执行次数以 task_log 为准(task_status.executedCount 含旧系统遗留值,仅在日志表查询失败时兜底)
+		if n, err := s.store.logCount(ctx, name); err == nil {
+			vo.ExecutedCount = n
+		}
 		if last, err := s.store.lastLog(ctx, name); err == nil && last != nil {
 			vo.LastExecuteStartTime = last.StartTime
 			vo.LastExecuteEndTime = last.EndTime

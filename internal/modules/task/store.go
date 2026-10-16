@@ -86,6 +86,15 @@ func (s *store) logs(ctx context.Context, name string, page, size int) ([]Log, e
 	return list, err
 }
 
+// logCount 实际执行次数 = task_log 行数。
+// task_status.executedCount 是旧 Java 调度器遗留的计数器(迁移时未清零,比真实次数多几百),
+// 列表展示一律以日志表为准;该列仍随每次执行 +1,只作兼容保留。
+func (s *store) logCount(ctx context.Context, name string) (int64, error) {
+	var n int64
+	err := s.db.GetContext(ctx, &n, "SELECT COUNT(*) FROM task_log WHERE taskName = ?", name)
+	return n, err
+}
+
 func (s *store) lastLog(ctx context.Context, name string) (*Log, error) {
 	l := &Log{}
 	err := s.db.GetContext(ctx, l, "SELECT id, taskName, version, startTime, endTime, timeRangeStart, timeRangeEnd, manualSchedule, fromUser, success, logSummary, '' AS detailLogs FROM task_log WHERE taskName = ? ORDER BY id DESC LIMIT 1", name)
